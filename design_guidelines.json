@@ -1,0 +1,156 @@
+{
+  "project_identity": {
+    "name": "Yube1 Stays",
+    "type": "Property Management Dashboard",
+    "persona": "E1 - The Anti-AI Designer",
+    "vibe": "Organic Utility. Professional but grounded. Efficient but warm.",
+    "emotional_tone": "Reliable, Fresh (Olive), Energetic (Yellow), Organized",
+    "target_audience": "Property Managers (Cluster & Admin)",
+    "primary_action": "Occupancy Tracking & Performance Monitoring"
+  },
+  "theme_config": {
+    "colors": {
+      "primary": {
+        "hex": "#556B2F",
+        "name": "Olive Drab",
+        "usage": "Primary buttons, active states, key data highlights, sidebar active items"
+      },
+      "secondary": {
+        "hex": "#F4EFA3",
+        "name": "Pale Lemon",
+        "usage": "Secondary backgrounds, highlights, 'light' state of primary"
+      },
+      "accent": {
+        "hex": "#F5C518",
+        "name": "Signal Yellow",
+        "usage": "Call to actions (secondary), alerts, performance badges, chart highlights"
+      },
+      "background": {
+        "hex": "#FAFAF9",
+        "name": "Stone White",
+        "usage": "Main app background (never pure #FFFFFF)"
+      },
+      "surface": {
+        "hex": "#FFFFFF",
+        "name": "Pure White",
+        "usage": "Cards, sidebars, modals"
+      },
+      "text": {
+        "primary": "#1A1C18",
+        "secondary": "#57534E",
+        "muted": "#A8A29E"
+      },
+      "charts": {
+        "color_1": "#556B2F",
+        "color_2": "#F5C518",
+        "color_3": "#A3B18A",
+        "color_4": "#D4A373",
+        "color_5": "#2A2F24"
+      }
+    },
+    "typography": {
+      "headings": {
+        "font_family": "Manrope, sans-serif",
+        "weight": "600/700",
+        "usage": "Page titles, card headers, metric values"
+      },
+      "body": {
+        "font_family": "Inter, sans-serif",
+        "weight": "400/500",
+        "usage": "Table data, labels, paragraphs"
+      }
+    },
+    "border_radius": "0.5rem"
+  },
+  "layout_rules": {
+    "spacing_system": "Generous. Use p-6 or p-8 for main containers. Gap-6 for grids.",
+    "grid_strategy": "Bento Grid Mode B (High Density).",
+    "sidebar": "Fixed left sidebar. Width 64 (256px). Dark Olive or White with Olive accents.",
+    "max_width": "max-w-[1600px] mx-auto for dashboard views.",
+    "z_index": {
+      "header": 40,
+      "sidebar": 50,
+      "modal": 100,
+      "toast": 110
+    }
+  },
+  "component_rules": {
+    "cards": {
+      "style": "Flat with subtle border. No heavy drop shadows.",
+      "classes": "bg-white border border-stone-200 shadow-sm hover:shadow-md transition-all duration-200"
+    },
+    "buttons": {
+      "primary": "bg-[#556B2F] hover:bg-[#435425] text-white rounded-md px-6 py-2 shadow-sm font-medium transition-transform active:scale-95",
+      "secondary": "bg-[#F5C518] hover:bg-[#D4A017] text-black rounded-md px-6 py-2 shadow-sm font-medium",
+      "outline": "border-2 border-[#556B2F] text-[#556B2F] hover:bg-[#556B2F]/10 rounded-md"
+    },
+    "inputs": {
+      "style": "Clean, defined borders. Focus ring should be Olive.",
+      "classes": "border-stone-200 focus:ring-[#556B2F] focus:border-[#556B2F] bg-white/50 backdrop-blur-sm"
+    },
+    "charts": {
+      "library": "Recharts",
+      "style": "Minimalist. Remove grid lines if possible, or make them very subtle (strokeDasharray='3 3'). Use custom tooltips."
+    }
+  },
+  "assets": {
+    "images": {
+      "login_bg": "https://images.unsplash.com/photo-1758548157747-285c7012db5b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHw0fHxtb2Rlcm4lMjBicmlnaHQlMjBhcGFydG1lbnQlMjBpbnRlcmlvciUyMGxpdmluZyUyMHJvb218ZW58MHx8fHwxNzczNDY4NTY5fDA&ixlib=rb-4.1.0&q=85",
+      "property_placeholder_1": "https://images.unsplash.com/photo-1771714209273-43d2f194c3a5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDN8MHwxfHNlYXJjaHw0fHxtb2Rlcm4lMjByZXNpZGVudGlhbCUyMGJ1aWxkaW5nJTIwZXh0ZXJpb3IlMjBzdW5ueXxlbnwwfHx8fDE3NzM0Njg1NzB8MA&ixlib=rb-4.1.0&q=85",
+      "property_placeholder_2": "https://images.unsplash.com/photo-1762139645949-b0c896b593a4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDN8MHwxfHNlYXJjaHwzfHxtb2Rlcm4lMjByZXNpZGVudGlhbCUyMGJ1aWxkaW5nJTIwZXh0ZXJpb3IlMjBzdW5ueXxlbnwwfHx8fDE3NzM0Njg1NzB8MA&ixlib=rb-4.1.0&q=85",
+      "avatar_placeholder": "https://images.unsplash.com/photo-1758526348403-b729c700d675?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTJ8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBtaW5pbWFsaXN0JTIwb2ZmaWNlJTIwdGVhbSUyMGhhcHB5fGVufDB8fHx8MTc3MzQ2ODU3MHww&ixlib=rb-4.1.0&q=85"
+    },
+    "icons": "Lucide React (default). Use specific metaphors: 'Building' for properties, 'Users' for managers, 'PieChart' for reports."
+  },
+  "pages": {
+    "login": {
+      "layout": "Split screen. Left: 40% Login Form (White). Right: 60% Image (Login BG) with Olive overlay (opacity-20).",
+      "elements": "Logo (Yube1), Email/Password inputs, 'Login' button (Primary)."
+    },
+    "dashboard_overview": {
+      "layout": "Bento Grid. Top row: KPI Cards (Total Beds, Occupancy %, Revenue). Middle row: Main Occupancy Chart (Line/Bar) + Property Leaderboard. Bottom row: Recent Activity / Alerts.",
+      "features": "Filter by date range. Toggle between 'Daily' and 'Monthly' views."
+    },
+    "occupancy_entry": {
+      "layout": "Data Grid / Table. List all 34 properties.",
+      "interaction": "Inline editing or Modal entry. Input fields for 'Occupancy %'. Auto-save or Bulk Save button at bottom.",
+      "validation": "0-100% range check. Visual feedback (Green for >90%, Red for <50%)."
+    },
+    "reports": {
+      "layout": "Print-friendly layout option.",
+      "visuals": "Consolidated Bar Charts (Property vs Occupancy). Pie Charts (Status breakdown).",
+      "export": "Add 'Export to CSV/PDF' button (UI only logic)."
+    },
+    "manager_performance": {
+      "layout": "Leaderboard Style. Rank managers by 'Overall Occupancy'.",
+      "cards": "Individual Manager Cards showing: Name, Assigned Property, Lifetime Performance Score."
+    },
+    "property_management": {
+      "layout": "List View with Actions (Edit, Delete).",
+      "modal": "Add/Edit Property Form (Name, Location, Total Beds, Assigned Manager)."
+    },
+    "user_management": {
+      "layout": "Table View.",
+      "actions": "Create Cluster Manager. Reset Password."
+    }
+  },
+  "instructions_to_main_agent": [
+    "INSTALL: npm install manrope inter (or import via Google Fonts in index.css).",
+    "CONFIG: Update tailwind.config.js to include the specific colors defined in theme_config.",
+    "OVERRIDE: Update index.css root variables to match the Olive/Yellow theme.",
+    "COMPONENT: Create a 'Layout' component that includes the Sidebar and Header.",
+    "COMPONENT: Create a 'StatCard' component for the dashboard KPIs.",
+    "STATE: Use context or simple state for Auth (Admin vs Cluster Manager). Mock the login flow.",
+    "DATA: Create a 'mockData.js' file with 34 properties and dummy occupancy data to populate the dashboard immediately.",
+    "CRITICAL: Ensure all interactive elements have data-testid attributes.",
+    "CRITICAL: Do not use default shadcn blue/slate colors. Force the Olive theme."
+  ],
+  "universal_guidelines": [
+    "Avoid generic AI design outputs. Use 'Organic Utility' vibe.",
+    "Dark colors only for text or specific accents, not gradients.",
+    "No generic centered layouts. Use grids.",
+    "Micro-animations on all interactive elements.",
+    "Use 'sonner' for toasts.",
+    "Use 'recharts' for all charts."
+  ]
+}
