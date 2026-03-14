@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
-import { Building2, Edit2, X, Check, Search, PlusCircle, UserX, Pencil } from 'lucide-react';
+import { Building2, Edit2, X, Check, Search, PlusCircle, UserX, Pencil, Trash2, Plus } from 'lucide-react';
 
 export default function Properties() {
   const { user } = useAuth();
@@ -16,11 +16,12 @@ export default function Properties() {
   const [search, setSearch] = useState('');
   const [addingNew, setAddingNew] = useState(false);
   const [newMgr, setNewMgr] = useState({ name: '', phone: '' });
-
-  // Inline bed editing
   const [editingBeds, setEditingBeds] = useState(null);
   const [bedsValue, setBedsValue] = useState('');
   const [savingBeds, setSavingBeds] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+  const [addPropModal, setAddPropModal] = useState(false);
+  const [newProp, setNewProp] = useState({ name: '', total_beds: '', manager_id: '', start_date: '' });
 
   const load = async () => {
     setLoading(true);
@@ -88,6 +89,39 @@ export default function Properties() {
     } catch (e) { toast.error('Failed to unassign manager'); }
   };
 
+  // Delete property completely
+  const handleDeleteProperty = async (prop) => {
+    if (!window.confirm(`DELETE "${prop.name}" permanently?\n\nThis will remove ALL occupancy history and manager assignments for this property. This cannot be undone.`)) return;
+    setDeleting(prop.id);
+    try {
+      await api.delete(`/properties/${prop.id}`);
+      toast.success(`"${prop.name}" deleted`);
+      load();
+    } catch (e) { toast.error('Failed to delete property'); }
+    finally { setDeleting(null); }
+  };
+
+  // Add new property
+  const handleAddProperty = async (e) => {
+    e.preventDefault();
+    if (!newProp.name || !newProp.total_beds) { toast.warning('Name and bed count required'); return; }
+    setSaving(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      await api.post('/properties', {
+        name: newProp.name,
+        total_beds: parseInt(newProp.total_beds),
+        manager_id: newProp.manager_id || null,
+        start_date: newProp.start_date || today
+      });
+      toast.success(`"${newProp.name}" added`);
+      setAddPropModal(false);
+      setNewProp({ name: '', total_beds: '', manager_id: '', start_date: '' });
+      load();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to add property'); }
+    finally { setSaving(false); }
+  };
+
   const filtered = properties.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
     (p.current_manager?.name || '').toLowerCase().includes(search.toLowerCase())
@@ -105,16 +139,19 @@ export default function Properties() {
             {properties.length} properties · {totalBeds.toLocaleString()} total beds
           </p>
         </div>
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search properties..."
-            data-testid="property-search"
-            className="pl-8 pr-4 py-2 border border-stone-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F] w-64"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+            <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search properties..." data-testid="property-search"
+              className="pl-8 pr-4 py-2 border border-stone-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F] w-64" />
+          </div>
+          {user?.role === 'admin' && (
+            <button data-testid="add-property-btn" onClick={() => setAddPropModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-[#556B2F] hover:bg-[#435425] text-white text-sm font-semibold rounded-lg transition-all active:scale-95 shadow-sm">
+              <Plus size={15} /> New Property
+            </button>
+          )}
         </div>
       </div>
 
@@ -140,7 +177,7 @@ export default function Properties() {
               </thead>
               <tbody>
                 {filtered.map((prop, idx) => (
-                  <tr key={prop.id} className="border-b border-stone-50 hover:bg-stone-50 transition-colors">
+                  <tr key={prop.id} className="border-b border-stone-50 hover:bg-stone-50 transition-colors group">
                     <td className="px-5 py-3 text-stone-400 text-xs">{idx + 1}</td>
 
                     {/* Property Name */}
@@ -229,14 +266,17 @@ export default function Properties() {
 
                     {user?.role === 'admin' && (
                       <td className="px-5 py-3 text-center">
-                        <button
-                          data-testid={`edit-property-${idx}`}
-                          onClick={() => openEdit(prop)}
-                          className="p-1.5 rounded-md hover:bg-[#556B2F]/10 text-stone-400 hover:text-[#556B2F] transition-colors"
-                          title="Assign / Change Manager"
-                        >
-                          <Edit2 size={14} />
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button data-testid={`edit-property-${idx}`} onClick={() => openEdit(prop)}
+                            className="p-1.5 rounded-md hover:bg-[#556B2F]/10 text-stone-400 hover:text-[#556B2F] transition-colors" title="Assign / Change Manager">
+                            <Edit2 size={13} />
+                          </button>
+                          <button data-testid={`delete-property-${idx}`} onClick={() => handleDeleteProperty(prop)}
+                            disabled={deleting === prop.id}
+                            className="p-1.5 rounded-md hover:bg-red-50 text-stone-400 hover:text-red-500 transition-colors disabled:opacity-40" title="Delete property">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -253,7 +293,59 @@ export default function Properties() {
         </div>
       )}
 
-      {/* Assign Manager Modal */}
+      {/* Add Property Modal */}
+      {addPropModal && (
+        <div className="fixed inset-0 bg-black/40 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-fade-in">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-stone-100">
+              <div>
+                <h3 className="font-bold font-heading text-[#1A1C18]">Add New Property</h3>
+                <p className="text-xs text-stone-400 mt-0.5">Create a new property in the system</p>
+              </div>
+              <button onClick={() => setAddPropModal(false)} className="p-1.5 rounded-md hover:bg-stone-100 text-stone-400">
+                <X size={16} />
+              </button>
+            </div>
+            <form onSubmit={handleAddProperty} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-stone-600 mb-1.5 uppercase tracking-wide">Property Name</label>
+                <input type="text" value={newProp.name} onChange={e => setNewProp({ ...newProp, name: e.target.value })}
+                  placeholder="e.g. Yube1 Skyline" required data-testid="new-prop-name"
+                  className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F]" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-stone-600 mb-1.5 uppercase tracking-wide">Total Beds</label>
+                <input type="number" min="1" value={newProp.total_beds} onChange={e => setNewProp({ ...newProp, total_beds: e.target.value })}
+                  placeholder="Number of beds" required data-testid="new-prop-beds"
+                  className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F]" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-stone-600 mb-1.5 uppercase tracking-wide">Assign Manager (optional)</label>
+                <select value={newProp.manager_id} onChange={e => setNewProp({ ...newProp, manager_id: e.target.value })} data-testid="new-prop-manager"
+                  className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F]">
+                  <option value="">No manager yet</option>
+                  {managers.map(m => <option key={m.id} value={m.id}>{m.name} — {m.phone}</option>)}
+                </select>
+              </div>
+              {newProp.manager_id && (
+                <div>
+                  <label className="block text-xs font-semibold text-stone-600 mb-1.5 uppercase tracking-wide">Assignment Start Date</label>
+                  <input type="date" value={newProp.start_date} onChange={e => setNewProp({ ...newProp, start_date: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F]" />
+                </div>
+              )}
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setAddPropModal(false)}
+                  className="flex-1 py-2.5 border border-stone-200 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-50">Cancel</button>
+                <button type="submit" disabled={saving} data-testid="add-prop-submit"
+                  className="flex-1 py-2.5 bg-[#556B2F] hover:bg-[#435425] text-white text-sm font-semibold rounded-lg active:scale-95 disabled:opacity-50">
+                  {saving ? 'Adding...' : 'Add Property'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {editModal && (
         <div className="fixed inset-0 bg-black/40 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-fade-in">

@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard, ClipboardEdit, CalendarDays, BarChart3,
-  Users, Building2, ShieldCheck, LogOut, ChevronLeft, ChevronRight
+  Users, Building2, ShieldCheck, LogOut, ChevronLeft, ChevronRight, UserCog
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -13,6 +13,7 @@ const navItems = [
   { to: '/reports/daily', icon: CalendarDays, label: 'Daily Report' },
   { to: '/reports/monthly', icon: BarChart3, label: 'Monthly Report' },
   { to: '/performance', icon: Users, label: 'PM Performance' },
+  { to: '/managers', icon: UserCog, label: 'Managers', adminOnly: true },
   { to: '/properties', icon: Building2, label: 'Properties' },
   { to: '/users', icon: ShieldCheck, label: 'User Management', adminOnly: true },
 ];

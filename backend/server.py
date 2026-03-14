@@ -131,6 +131,42 @@ async def get_properties(current_user=Depends(get_current_user)):
             prop["current_manager"] = None
     return properties
 
+class CreatePropertyRequest(BaseModel):
+    name: str
+    total_beds: int
+    manager_id: Optional[str] = None
+    start_date: Optional[str] = None
+
+@api_router.post("/properties")
+async def create_property(request: CreatePropertyRequest, current_user=Depends(require_admin)):
+    existing = await db.properties.find_one({"name": request.name})
+    if existing:
+        raise HTTPException(status_code=400, detail="A property with this name already exists")
+    prop_id = str(uuid.uuid4())
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    await db.properties.insert_one({
+        "id": prop_id, "name": request.name, "total_beds": request.total_beds,
+        "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    if request.manager_id:
+        await db.assignments.insert_one({
+            "id": str(uuid.uuid4()), "manager_id": request.manager_id,
+            "property_id": prop_id, "start_date": request.start_date or today,
+            "end_date": None, "created_at": datetime.now(timezone.utc).isoformat()
+        })
+    prop = await db.properties.find_one({"id": prop_id}, {"_id": 0})
+    return prop
+
+@api_router.delete("/properties/{property_id}")
+async def delete_property(property_id: str, current_user=Depends(require_admin)):
+    prop = await db.properties.find_one({"id": property_id})
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    await db.assignments.delete_many({"property_id": property_id})
+    await db.occupancy.delete_many({"property_id": property_id})
+    await db.properties.delete_one({"id": property_id})
+    return {"message": "Property and all related data deleted"}
+
 @api_router.put("/properties/{property_id}")
 async def update_property(property_id: str, request: UpdatePropertyRequest, current_user=Depends(require_admin)):
     update_data = {k: v for k, v in request.model_dump().items() if v is not None}
@@ -562,6 +598,16 @@ async def delete_user(user_id: str, current_user=Depends(require_admin)):
     return {"message": "User deleted"}
 
 
+@api_router.delete("/managers/{manager_id}")
+async def delete_manager(manager_id: str, current_user=Depends(require_admin)):
+    manager = await db.managers.find_one({"id": manager_id})
+    if not manager:
+        raise HTTPException(status_code=404, detail="Manager not found")
+    # Force delete: remove all assignments and the manager record completely
+    await db.assignments.delete_many({"manager_id": manager_id})
+    await db.managers.delete_one({"id": manager_id})
+    return {"message": "Manager and all assignment records deleted"}
+
 @api_router.delete("/assignments/property/{property_id}")
 async def unassign_manager(property_id: str, current_user=Depends(require_admin)):
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -570,19 +616,6 @@ async def unassign_manager(property_id: str, current_user=Depends(require_admin)
         {"$set": {"end_date": today}}
     )
     return {"message": "Manager unassigned", "modified": result.modified_count}
-
-@api_router.delete("/managers/{manager_id}")
-async def delete_manager(manager_id: str, current_user=Depends(require_admin)):
-    active = await db.assignments.count_documents({"manager_id": manager_id, "end_date": None})
-    if active > 0:
-        raise HTTPException(
-            status_code=400,
-            detail="This manager has active property assignments. Please unassign them from all properties first."
-        )
-    result = await db.managers.delete_one({"id": manager_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Manager not found")
-    return {"message": "Manager deleted"}
 
 
 # ======================== ALERTS ========================

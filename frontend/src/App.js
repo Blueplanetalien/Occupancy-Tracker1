@@ -9,6 +9,7 @@ import DailyReport from './pages/DailyReport';
 import MonthlyReport from './pages/MonthlyReport';
 import PMPerformance from './pages/PMPerformance';
 import Properties from './pages/Properties';
+import Managers from './pages/Managers';
 import UserManagement from './pages/UserManagement';
 import Layout from './components/Layout';
 import './App.css';
@@ -42,6 +43,7 @@ function App() {
             <Route path="reports/daily" element={<DailyReport />} />
             <Route path="reports/monthly" element={<MonthlyReport />} />
             <Route path="performance" element={<PMPerformance />} />
+            <Route path="managers" element={<ProtectedRoute adminOnly><Managers /></ProtectedRoute>} />
             <Route path="properties" element={<Properties />} />
             <Route path="users" element={<ProtectedRoute adminOnly><UserManagement /></ProtectedRoute>} />
           </Route>
