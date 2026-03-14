@@ -8,6 +8,8 @@ import OccupancyEntry from './pages/OccupancyEntry';
 import DailyReport from './pages/DailyReport';
 import MonthlyReport from './pages/MonthlyReport';
 import PMPerformance from './pages/PMPerformance';
+import PropertyPerformance from './pages/PropertyPerformance';
+import PropertyDetail from './pages/PropertyDetail';
 import Properties from './pages/Properties';
 import Managers from './pages/Managers';
 import UserManagement from './pages/UserManagement';
@@ -43,6 +45,8 @@ function App() {
             <Route path="reports/daily" element={<DailyReport />} />
             <Route path="reports/monthly" element={<MonthlyReport />} />
             <Route path="performance" element={<PMPerformance />} />
+            <Route path="performance/properties" element={<PropertyPerformance />} />
+            <Route path="performance/properties/:propertyId" element={<PropertyDetail />} />
             <Route path="managers" element={<ProtectedRoute adminOnly><Managers /></ProtectedRoute>} />
             <Route path="properties" element={<Properties />} />
             <Route path="users" element={<ProtectedRoute adminOnly><UserManagement /></ProtectedRoute>} />

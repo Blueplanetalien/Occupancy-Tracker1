@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
-import { Building2, Edit2, X, Check, Search, PlusCircle, UserX, Pencil, Trash2, Plus } from 'lucide-react';
+import { Building2, Edit2, X, Check, Search, PlusCircle, UserX, Pencil, Trash2, Plus, BarChart2 } from 'lucide-react';
 
 export default function Properties() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [properties, setProperties] = useState([]);
   const [managers, setManagers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -267,6 +269,10 @@ export default function Properties() {
                     {user?.role === 'admin' && (
                       <td className="px-5 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
+                          <button data-testid={`view-analytics-${idx}`} onClick={() => navigate(`/performance/properties/${prop.id}`)}
+                            className="p-1.5 rounded-md hover:bg-[#556B2F]/10 text-stone-400 hover:text-[#556B2F] transition-colors" title="View analytics">
+                            <BarChart2 size={13} />
+                          </button>
                           <button data-testid={`edit-property-${idx}`} onClick={() => openEdit(prop)}
                             className="p-1.5 rounded-md hover:bg-[#556B2F]/10 text-stone-400 hover:text-[#556B2F] transition-colors" title="Assign / Change Manager">
                             <Edit2 size={13} />

@@ -236,7 +236,7 @@ export default function PMPerformance() {
                                       {pp.days_with_data > 0 ? `${pp.avg_occupancy}%` : '—'}
                                     </div>
                                     <div className="text-[10px] text-stone-400 mt-0.5">
-                                      {pp.beds} beds · {pp.start_date} → {pp.end_date || 'present'}
+                                      {pp.total_beds} beds · {pp.start_date} → {pp.end_date || 'present'}
                                     </div>
                                     <div className="text-[10px] text-stone-400">{pp.days_with_data} days tracked</div>
                                   </div>

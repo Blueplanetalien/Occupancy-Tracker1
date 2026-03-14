@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard, ClipboardEdit, CalendarDays, BarChart3,
-  Users, Building2, ShieldCheck, LogOut, ChevronLeft, ChevronRight, UserCog
+  Users, Building2, ShieldCheck, LogOut, ChevronLeft, ChevronRight, UserCog, BarChart2
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -13,6 +13,7 @@ const navItems = [
   { to: '/reports/daily', icon: CalendarDays, label: 'Daily Report' },
   { to: '/reports/monthly', icon: BarChart3, label: 'Monthly Report' },
   { to: '/performance', icon: Users, label: 'PM Performance' },
+  { to: '/performance/properties', icon: BarChart2, label: 'Property Analytics' },
   { to: '/managers', icon: UserCog, label: 'Managers', adminOnly: true },
   { to: '/properties', icon: Building2, label: 'Properties' },
   { to: '/users', icon: ShieldCheck, label: 'User Management', adminOnly: true },
@@ -60,7 +61,9 @@ export default function Layout() {
         <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto scrollbar-thin">
           {visible.map(item => {
             const Icon = item.icon;
-            const isActive = location.pathname === item.to || (item.to !== '/dashboard' && location.pathname.startsWith(item.to));
+            const isActive = location.pathname === item.to ||
+              (item.to !== '/dashboard' && item.to !== '/performance' && location.pathname.startsWith(item.to)) ||
+              (item.to === '/performance' && location.pathname === '/performance');
             return (
               <Link
                 key={item.to}

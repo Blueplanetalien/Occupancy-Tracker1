@@ -556,6 +556,133 @@ async def get_manager_performance(manager_id: str, current_user=Depends(get_curr
     return {"manager": manager, "lifetime_avg_occupancy": round(lifetime_avg, 2), "total_days_tracked": total_days, "assignments": detailed}
 
 
+# ======================== PROPERTY PERFORMANCE ========================
+
+@api_router.get("/performance/properties")
+async def get_properties_performance(current_user=Depends(get_current_user)):
+    properties = await db.properties.find({"is_active": True}, {"_id": 0}).sort("name", 1).to_list(1000)
+    now = datetime.now(timezone.utc)
+    current_month = now.strftime("%Y-%m")
+    last_month = (now.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+
+    result = []
+    for prop in properties:
+        all_entries = await db.occupancy.find({"property_id": prop["id"]}, {"_id": 0}).to_list(10000)
+        assignment = await db.assignments.find_one({"property_id": prop["id"], "end_date": None}, {"_id": 0})
+        manager_name = None
+        if assignment:
+            manager = await db.managers.find_one({"id": assignment["manager_id"]}, {"_id": 0})
+            if manager:
+                manager_name = manager["name"]
+
+        all_time_avg = sum(e["occupancy_percentage"] for e in all_entries) / len(all_entries) if all_entries else 0
+        month_entries = [e for e in all_entries if e["date"].startswith(current_month)]
+        month_avg = sum(e["occupancy_percentage"] for e in month_entries) / len(month_entries) if month_entries else 0
+        last_month_entries = [e for e in all_entries if e["date"].startswith(last_month)]
+        last_month_avg = sum(e["occupancy_percentage"] for e in last_month_entries) / len(last_month_entries) if last_month_entries else 0
+
+        if month_entries and last_month_entries:
+            trend = "up" if month_avg > last_month_avg else ("down" if month_avg < last_month_avg else "flat")
+        else:
+            trend = "flat"
+
+        result.append({
+            "property_id": prop["id"],
+            "property_name": prop["name"],
+            "total_beds": prop["total_beds"],
+            "manager_name": manager_name,
+            "all_time_avg": round(all_time_avg, 2),
+            "current_month_avg": round(month_avg, 2),
+            "last_month_avg": round(last_month_avg, 2),
+            "total_days_tracked": len(all_entries),
+            "trend": trend,
+        })
+
+    result.sort(key=lambda x: x["all_time_avg"], reverse=True)
+    return result
+
+
+@api_router.get("/performance/properties/{property_id}")
+async def get_property_detail(property_id: str, year: Optional[int] = None, current_user=Depends(get_current_user)):
+    prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+
+    if not year:
+        year = datetime.now(timezone.utc).year
+
+    year_entries = await db.occupancy.find(
+        {"property_id": property_id, "date": {"$regex": f"^{year}"}},
+        {"_id": 0}
+    ).to_list(10000)
+
+    heatmap = {e["date"]: {"pct": e["occupancy_percentage"], "beds": e["occupied_beds"]} for e in year_entries}
+
+    all_entries = await db.occupancy.find({"property_id": property_id}, {"_id": 0}).to_list(10000)
+    all_time_avg = sum(e["occupancy_percentage"] for e in all_entries) / len(all_entries) if all_entries else 0
+
+    monthly_averages = []
+    for m in range(1, 13):
+        month_str = f"{year}-{m:02d}"
+        m_entries = [e for e in year_entries if e["date"].startswith(month_str)]
+        avg = sum(e["occupancy_percentage"] for e in m_entries) / len(m_entries) if m_entries else None
+        monthly_averages.append({
+            "month": m,
+            "month_name": calendar.month_abbr[m],
+            "avg_occupancy": round(avg, 2) if avg is not None else None,
+            "days_with_data": len(m_entries)
+        })
+
+    assignments = await db.assignments.find({"property_id": property_id}, {"_id": 0}).sort("start_date", -1).to_list(100)
+    assignment_history = []
+    for a in assignments:
+        manager = await db.managers.find_one({"id": a["manager_id"]}, {"_id": 0})
+        if manager:
+            assignment_history.append({
+                "manager_name": manager["name"],
+                "manager_phone": manager["phone"],
+                "start_date": a["start_date"],
+                "end_date": a["end_date"],
+                "is_current": a["end_date"] is None
+            })
+
+    return {
+        "property": prop,
+        "year": year,
+        "all_time_avg": round(all_time_avg, 2),
+        "total_days_tracked": len(all_entries),
+        "heatmap": heatmap,
+        "monthly_averages": monthly_averages,
+        "assignment_history": assignment_history
+    }
+
+
+@api_router.get("/reports/trend-comparison")
+async def get_trend_comparison(year: int, current_user=Depends(get_current_user)):
+    properties = await db.properties.find({"is_active": True}, {"_id": 0}).to_list(1000)
+    total_beds = sum(p["total_beds"] for p in properties)
+    comparison = []
+    for month in range(1, 13):
+        data_point = {"month": month, "month_name": calendar.month_abbr[month]}
+        for y in [year - 1, year]:
+            month_str = f"{y}-{month:02d}"
+            entries = await db.occupancy.find({"date": {"$regex": f"^{month_str}"}}, {"_id": 0}).to_list(10000)
+            if entries:
+                by_date = {}
+                for e in entries:
+                    by_date.setdefault(e["date"], []).append(e)
+                day_avgs = [
+                    sum(ev["occupied_beds"] for ev in v) / total_beds * 100 if total_beds > 0 else 0
+                    for v in by_date.values()
+                ]
+                avg = round(sum(day_avgs) / len(day_avgs), 2) if day_avgs else None
+            else:
+                avg = None
+            data_point[f"y{y}"] = avg
+        comparison.append(data_point)
+    return {"current_year": year, "prev_year": year - 1, "comparison": comparison, "total_beds": total_beds}
+
+
 # ======================== USER MANAGEMENT ========================
 
 @api_router.get("/users")

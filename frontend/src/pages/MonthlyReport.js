@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import api from '../utils/api';
-import { ChevronLeft, ChevronRight, Download, FileText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, FileText, TrendingUp } from 'lucide-react';
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell
+  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Cell, Legend
 } from 'recharts';
 import { downloadCSV, exportMonthlyReportPDF } from '../utils/export';
 
@@ -27,6 +27,9 @@ export default function MonthlyReport() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [comparison, setComparison] = useState(null);
+  const [loadingComparison, setLoadingComparison] = useState(false);
+  const [showComparison, setShowComparison] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -41,6 +44,16 @@ export default function MonthlyReport() {
     if (m > 12) { m = 1; y++; }
     if (m < 1) { m = 12; y--; }
     setMonth(m); setYear(y);
+    setComparison(null); setShowComparison(false);
+  };
+
+  const loadComparison = () => {
+    if (comparison) { setShowComparison(true); return; }
+    setLoadingComparison(true);
+    api.get(`/reports/trend-comparison?year=${year}`)
+      .then(res => { setComparison(res.data); setShowComparison(true); })
+      .catch(console.error)
+      .finally(() => setLoadingComparison(false));
   };
 
   const sorted = (report?.properties || []).slice().sort((a, b) => b.avg_occupancy_percentage - a.avg_occupancy_percentage);
@@ -259,6 +272,110 @@ export default function MonthlyReport() {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* Year-over-Year Comparison */}
+          <div className="bg-white rounded-xl border border-stone-100 shadow-sm p-5 mt-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-bold font-heading text-[#1A1C18]">Year-over-Year Comparison</h3>
+                <p className="text-xs text-stone-400 mt-0.5">
+                  {year} vs {year - 1} — monthly average occupancy across all properties
+                </p>
+              </div>
+              {!showComparison ? (
+                <button
+                  data-testid="load-yoy-btn"
+                  onClick={loadComparison}
+                  disabled={loadingComparison}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#556B2F] text-white text-xs font-semibold rounded-lg hover:bg-[#435425] transition-all active:scale-95 disabled:opacity-50"
+                >
+                  <TrendingUp size={13} />
+                  {loadingComparison ? 'Loading…' : 'Compare with Last Year'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowComparison(false)}
+                  className="text-xs text-stone-400 hover:text-stone-600 px-3 py-1.5 border border-stone-200 rounded-lg hover:bg-stone-50 transition-colors"
+                >
+                  Hide
+                </button>
+              )}
+            </div>
+            {showComparison && comparison && (
+              <>
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={comparison.comparison} margin={{ top: 5, right: 20, bottom: 0, left: -20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0ee" />
+                    <XAxis dataKey="month_name" tick={{ fontSize: 10, fill: '#a8a29e' }} axisLine={false} tickLine={false} />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#a8a29e' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} />
+                    <Tooltip
+                      formatter={(v, n) => [v != null ? `${v}%` : 'No data', n]}
+                      labelFormatter={l => `Month: ${l}`}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+                    <Line
+                      type="monotone"
+                      dataKey={`y${year - 1}`}
+                      name={String(year - 1)}
+                      stroke="#a8a29e"
+                      strokeWidth={2}
+                      strokeDasharray="5 5"
+                      dot={{ r: 3, fill: '#a8a29e' }}
+                      connectNulls
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey={`y${year}`}
+                      name={String(year)}
+                      stroke="#556B2F"
+                      strokeWidth={2.5}
+                      dot={{ r: 3.5, fill: '#556B2F' }}
+                      connectNulls
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+                {/* Mini table: side-by-side month values */}
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-stone-100">
+                        <th className="text-left py-1.5 text-stone-400 font-medium">Month</th>
+                        {comparison.comparison.map(d => (
+                          <th key={d.month} className="text-center py-1.5 text-stone-400 font-medium w-12">{d.month_name}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-stone-50">
+                        <td className="py-1.5 text-stone-500 font-medium">{year - 1}</td>
+                        {comparison.comparison.map(d => (
+                          <td key={d.month} className="text-center py-1.5 font-bold text-stone-400">
+                            {d[`y${year - 1}`] != null ? `${d[`y${year - 1}`]}%` : '—'}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <td className="py-1.5 font-semibold text-[#556B2F]">{year}</td>
+                        {comparison.comparison.map(d => {
+                          const v = d[`y${year}`];
+                          return (
+                            <td key={d.month} className={`text-center py-1.5 font-bold ${v != null ? (v >= 75 ? 'text-green-700' : v >= 50 ? 'text-yellow-600' : 'text-red-500') : 'text-stone-200'}`}>
+                              {v != null ? `${v}%` : '—'}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+            {!showComparison && (
+              <div className="h-32 flex items-center justify-center text-stone-300 text-sm border-2 border-dashed border-stone-100 rounded-xl">
+                Click "Compare with Last Year" to load the comparison chart
+              </div>
+            )}
           </div>
         </>
       )}
