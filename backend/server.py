@@ -246,6 +246,8 @@ async def save_bulk_occupancy(request: BulkOccupancyRequest, current_user=Depend
         prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
         if not prop:
             continue
+        if occupancy_pct < 0 or occupancy_pct > 100:
+            continue
         occupied_beds = round(prop["total_beds"] * occupancy_pct / 100)
         existing = await db.occupancy.find_one({"property_id": property_id, "date": request.date})
         if existing:
