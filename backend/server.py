@@ -562,6 +562,76 @@ async def delete_user(user_id: str, current_user=Depends(require_admin)):
     return {"message": "User deleted"}
 
 
+# ======================== ALERTS ========================
+
+@api_router.get("/alerts/low-occupancy")
+async def get_low_occupancy_alerts(threshold: int = 50, current_user=Depends(get_current_user)):
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    properties = await db.properties.find({"is_active": True}, {"_id": 0}).to_list(1000)
+
+    low_today = []
+    not_reported = []
+    consecutive_low = []
+
+    for prop in properties:
+        entry = await db.occupancy.find_one({"property_id": prop["id"], "date": today}, {"_id": 0})
+        assignment = await db.assignments.find_one({"property_id": prop["id"], "end_date": None}, {"_id": 0})
+        manager_name = None
+        if assignment:
+            manager = await db.managers.find_one({"id": assignment["manager_id"]}, {"_id": 0})
+            if manager:
+                manager_name = manager["name"]
+
+        if entry:
+            if entry["occupancy_percentage"] < threshold:
+                low_today.append({
+                    "property_id": prop["id"],
+                    "property_name": prop["name"],
+                    "total_beds": prop["total_beds"],
+                    "manager_name": manager_name,
+                    "occupancy_percentage": entry["occupancy_percentage"],
+                    "occupied_beds": entry["occupied_beds"]
+                })
+        else:
+            not_reported.append({
+                "property_id": prop["id"],
+                "property_name": prop["name"],
+                "total_beds": prop["total_beds"],
+                "manager_name": manager_name
+            })
+
+        # Check 3 consecutive days below threshold (exclude today)
+        days_low = 0
+        total_occ = 0
+        for i in range(1, 4):
+            d = (datetime.now(timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
+            e = await db.occupancy.find_one({"property_id": prop["id"], "date": d}, {"_id": 0})
+            if e and e["occupancy_percentage"] < threshold:
+                days_low += 1
+                total_occ += e["occupancy_percentage"]
+            else:
+                break  # streak broken
+
+        if days_low >= 3:
+            consecutive_low.append({
+                "property_id": prop["id"],
+                "property_name": prop["name"],
+                "total_beds": prop["total_beds"],
+                "manager_name": manager_name,
+                "consecutive_days": days_low,
+                "avg_occupancy": round(total_occ / days_low, 2)
+            })
+
+    return {
+        "date": today,
+        "threshold": threshold,
+        "low_today": low_today,
+        "not_reported_today": not_reported,
+        "consecutive_low": consecutive_low,
+        "total_alerts": len(low_today) + len(consecutive_low)
+    }
+
+
 # ======================== SEED DATA ========================
 
 PROPERTIES_SEED = [

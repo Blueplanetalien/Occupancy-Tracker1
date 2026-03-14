@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { Building2, BedDouble, TrendingUp, Activity, ArrowUpRight } from 'lucide-react';
+import { Building2, BedDouble, TrendingUp, Activity, ArrowUpRight, AlertTriangle, Bell, Clock } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell, Legend
@@ -44,18 +44,21 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [overview, setOverview] = useState(null);
   const [dailyReport, setDailyReport] = useState(null);
+  const [alerts, setAlerts] = useState(null);
   const [loading, setLoading] = useState(true);
   const today = format(new Date(), 'yyyy-MM-dd');
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [ovRes, drRes] = await Promise.all([
+        const [ovRes, drRes, alRes] = await Promise.all([
           api.get('/dashboard/overview'),
-          api.get(`/reports/daily?date=${today}`)
+          api.get(`/reports/daily?date=${today}`),
+          api.get('/alerts/low-occupancy?threshold=50')
         ]);
         setOverview(ovRes.data);
         setDailyReport(drRes.data);
+        setAlerts(alRes.data);
       } catch (e) {
         console.error(e);
       } finally {
@@ -180,7 +183,7 @@ export default function Dashboard() {
 
       {/* Today's Top Properties Bar Chart */}
       {topProps.length > 0 && (
-        <div data-testid="property-bar-chart" className="bg-white rounded-xl border border-stone-100 shadow-sm p-5">
+        <div data-testid="property-bar-chart" className="bg-white rounded-xl border border-stone-100 shadow-sm p-5 mb-5">
           <div className="flex items-center justify-between mb-5">
             <div>
               <h3 className="text-sm font-bold font-heading text-[#1A1C18]">Property Occupancy Today</h3>
@@ -204,6 +207,93 @@ export default function Dashboard() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Alerts Section */}
+      {alerts && (alerts.low_today.length > 0 || alerts.consecutive_low.length > 0 || alerts.not_reported_today.length > 0) && (
+        <div data-testid="alerts-section" className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Bell size={16} className="text-[#1A1C18]" />
+            <h3 className="text-sm font-bold font-heading text-[#1A1C18]">Low Occupancy Alerts</h3>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-600">
+              {alerts.low_today.length + alerts.consecutive_low.length} alerts
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Low today */}
+            {alerts.low_today.length > 0 && (
+              <div className="bg-white rounded-xl border border-red-100 shadow-sm overflow-hidden">
+                <div className="px-4 py-3 bg-red-50 border-b border-red-100 flex items-center gap-2">
+                  <AlertTriangle size={14} className="text-red-500" />
+                  <span className="text-xs font-bold text-red-700">Low Occupancy Today</span>
+                  <span className="ml-auto text-xs text-red-500 font-semibold">{alerts.low_today.length} properties</span>
+                </div>
+                <div className="divide-y divide-stone-50 max-h-64 overflow-y-auto scrollbar-thin">
+                  {alerts.low_today.map(p => (
+                    <div key={p.property_id} className="px-4 py-2.5 flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-medium text-stone-700">{p.property_name.replace('Yube1 ', '')}</div>
+                        <div className="text-[10px] text-stone-400">{p.manager_name || '—'}</div>
+                      </div>
+                      <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded-lg">
+                        {p.occupancy_percentage}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Consecutive low */}
+            {alerts.consecutive_low.length > 0 && (
+              <div className="bg-white rounded-xl border border-orange-100 shadow-sm overflow-hidden">
+                <div className="px-4 py-3 bg-orange-50 border-b border-orange-100 flex items-center gap-2">
+                  <TrendingUp size={14} className="text-orange-500" />
+                  <span className="text-xs font-bold text-orange-700">3+ Consecutive Days Low</span>
+                  <span className="ml-auto text-xs text-orange-500 font-semibold">{alerts.consecutive_low.length}</span>
+                </div>
+                <div className="divide-y divide-stone-50 max-h-64 overflow-y-auto scrollbar-thin">
+                  {alerts.consecutive_low.map(p => (
+                    <div key={p.property_id} className="px-4 py-2.5 flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-medium text-stone-700">{p.property_name.replace('Yube1 ', '')}</div>
+                        <div className="text-[10px] text-stone-400">{p.manager_name || '—'} · {p.consecutive_days} days</div>
+                      </div>
+                      <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">
+                        avg {p.avg_occupancy}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Not reported */}
+            {alerts.not_reported_today.length > 0 && (
+              <div className="bg-white rounded-xl border border-amber-100 shadow-sm overflow-hidden">
+                <div className="px-4 py-3 bg-amber-50 border-b border-amber-100 flex items-center gap-2">
+                  <Clock size={14} className="text-amber-500" />
+                  <span className="text-xs font-bold text-amber-700">Not Reported Today</span>
+                  <span className="ml-auto text-xs text-amber-500 font-semibold">{alerts.not_reported_today.length}</span>
+                </div>
+                <div className="divide-y divide-stone-50 max-h-64 overflow-y-auto scrollbar-thin">
+                  {alerts.not_reported_today.map(p => (
+                    <div key={p.property_id} className="px-4 py-2.5 flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-medium text-stone-700">{p.property_name.replace('Yube1 ', '')}</div>
+                        <div className="text-[10px] text-stone-400">{p.manager_name || '—'}</div>
+                      </div>
+                      <span className="text-[10px] font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">
+                        Pending
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

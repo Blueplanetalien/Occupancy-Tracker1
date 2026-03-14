@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import api from '../utils/api';
-import { Trophy, Phone, Building2, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react';
+import { Trophy, Phone, Building2, ChevronDown, ChevronUp, Download, FileText } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   RadarChart, Radar, PolarGrid, PolarAngleAxis
 } from 'recharts';
+import { downloadCSV, exportPMPerformancePDF } from '../utils/export';
 
 const RANK_COLORS = ['#F5C518', '#C0C0C0', '#CD7F32'];
 const getColor = (pct) => pct >= 75 ? '#556B2F' : pct >= 50 ? '#F5C518' : '#ef4444';
@@ -28,10 +29,34 @@ export default function PMPerformance() {
     <div className="p-6 lg:p-8 min-h-screen bg-[#FAFAF9] animate-fade-in">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold font-heading text-[#1A1C18]">PM Performance</h1>
-        <p className="text-sm text-stone-400 mt-0.5">
-          Lifetime performance tracking for all property managers
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold font-heading text-[#1A1C18]">PM Performance</h1>
+            <p className="text-sm text-stone-400 mt-0.5">
+              Lifetime performance tracking for all property managers
+            </p>
+          </div>
+          {managers.length > 0 && (
+            <div className="flex gap-1.5">
+              <button data-testid="pm-export-csv"
+                onClick={() => downloadCSV(managers, [
+                  { key: 'manager_name', label: 'Manager' },
+                  { key: 'manager_phone', label: 'Phone' },
+                  { key: 'lifetime_avg_occupancy', label: 'Lifetime Avg %' },
+                  { key: 'total_days_tracked', label: 'Days Tracked' },
+                  { key: 'properties_count', label: 'Properties Count' },
+                ], `Yube1_PM_Performance_${new Date().toISOString().split('T')[0]}.csv`)}
+                className="flex items-center gap-1.5 px-3 py-2 border border-stone-200 bg-white rounded-lg text-xs font-medium text-stone-600 hover:bg-stone-50 transition-colors">
+                <Download size={13} /> CSV
+              </button>
+              <button data-testid="pm-export-pdf"
+                onClick={() => exportPMPerformancePDF(managers)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-[#556B2F] text-white rounded-lg text-xs font-medium hover:bg-[#435425] transition-colors">
+                <FileText size={13} /> PDF
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {loading ? (

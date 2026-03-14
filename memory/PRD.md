@@ -67,15 +67,12 @@ Build a full-stack dashboard for Yube1 Stays to manage occupancy data across 34 
 
 ## What's Been Implemented
 ### Phase 1 MVP (March 2026)
-- **Auth**: JWT login, admin + cluster manager roles, admin creates cluster manager accounts
-- **Dashboard Overview**: KPI cards, 30-day trend chart, today's property bar chart
-- **Occupancy Entry**: Daily % entry for all 34 properties, color-coded, bulk save
-- **Daily Report**: Date picker, pie chart (occupied/vacant), bar chart per property, full table
-- **Monthly Report**: Month/year selector, daily trend line chart, property comparison bar chart
-- **PM Performance**: Leaderboard with lifetime avg occupancy, expandable property history, top-3 podium
-- **Properties**: Full list with search, admin can change manager assignments with date tracking
-- **User Management**: Admin creates/deletes cluster manager accounts
-- **Seed Data**: All 34 properties + 33 managers pre-loaded on startup
+- Auth, Dashboard, Occupancy Entry, Daily/Monthly Reports, PM Performance, Properties, User Management — all implemented and tested (18/18 backend tests)
+
+### Phase 2 Enhancements (March 2026)
+- **CSV/PDF Export**: Added to Daily Report, Monthly Report, PM Performance pages using jsPDF + autoTable
+- **Add New Manager in Properties**: Toggle in change-manager modal between "Select Existing" and "Add New Manager" (name + phone)
+- **Low Occupancy Alerts**: Dashboard alert panel with 3 sections — Low Today (<50%), 3+ Consecutive Days Low, Not Reported Today
 
 ---
 

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import api from '../utils/api';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, FileText } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell
 } from 'recharts';
+import { downloadCSV, exportMonthlyReportPDF } from '../utils/export';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
@@ -40,6 +41,26 @@ export default function MonthlyReport() {
 
   const sortedProps = (report?.properties || []).slice().sort((a, b) => b.avg_occupancy_percentage - a.avg_occupancy_percentage);
 
+  const handleExportCSV = () => {
+    if (!report) return;
+    downloadCSV(
+      sortedProps,
+      [
+        { key: 'property_name', label: 'Property' },
+        { key: 'manager_name', label: 'Manager' },
+        { key: 'total_beds', label: 'Total Beds' },
+        { key: 'avg_occupancy_percentage', label: 'Avg Occupancy %' },
+        { key: 'days_with_data', label: 'Days with Data' },
+      ],
+      `Yube1_Monthly_Report_${year}_${String(month).padStart(2,'0')}.csv`
+    );
+  };
+
+  const handleExportPDF = () => {
+    if (!report) return;
+    exportMonthlyReportPDF(report);
+  };
+
   return (
     <div className="p-6 lg:p-8 min-h-screen bg-[#FAFAF9] animate-fade-in">
       {/* Header */}
@@ -65,6 +86,18 @@ export default function MonthlyReport() {
           <button onClick={() => changeMonth(1)} className="p-2 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 text-stone-500">
             <ChevronRight size={15} />
           </button>
+          {report && (
+            <div className="flex gap-1.5 ml-2">
+              <button data-testid="monthly-export-csv" onClick={handleExportCSV}
+                className="flex items-center gap-1.5 px-3 py-2 border border-stone-200 bg-white rounded-lg text-xs font-medium text-stone-600 hover:bg-stone-50 transition-colors">
+                <Download size={13} /> CSV
+              </button>
+              <button data-testid="monthly-export-pdf" onClick={handleExportPDF}
+                className="flex items-center gap-1.5 px-3 py-2 bg-[#556B2F] text-white rounded-lg text-xs font-medium hover:bg-[#435425] transition-colors">
+                <FileText size={13} /> PDF
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

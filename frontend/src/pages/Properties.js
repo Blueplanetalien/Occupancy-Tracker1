@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
-import { Building2, Edit2, X, Check, Search } from 'lucide-react';
+import { Building2, Edit2, X, Check, Search, UserPlus, PlusCircle } from 'lucide-react';
 
 export default function Properties() {
   const { user } = useAuth();
@@ -14,6 +14,8 @@ export default function Properties() {
   const [startDate, setStartDate] = useState('');
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
+  const [addingNew, setAddingNew] = useState(false);
+  const [newMgr, setNewMgr] = useState({ name: '', phone: '' });
 
   const load = async () => {
     setLoading(true);
@@ -32,15 +34,26 @@ export default function Properties() {
     setNewManagerId(prop.current_manager?.id || '');
     const today = new Date().toISOString().split('T')[0];
     setStartDate(today);
+    setAddingNew(false);
+    setNewMgr({ name: '', phone: '' });
   };
 
   const handleAssign = async () => {
-    if (!newManagerId || !startDate) { toast.warning('Select a manager and start date'); return; }
-    if (newManagerId === editModal.current_manager?.id) { toast.info('Same manager, no change needed'); return; }
+    if (!startDate) { toast.warning('Select a start date'); return; }
     setSaving(true);
     try {
+      let managerId = newManagerId;
+      // If creating a new manager, create them first
+      if (addingNew) {
+        if (!newMgr.name || !newMgr.phone) { toast.warning('Enter name and phone for new manager'); setSaving(false); return; }
+        const res = await api.post('/managers', { name: newMgr.name, phone: newMgr.phone });
+        managerId = res.data.id;
+        toast.success(`New manager "${newMgr.name}" created`);
+      }
+      if (!managerId) { toast.warning('Select or create a manager'); setSaving(false); return; }
+      if (!addingNew && managerId === editModal.current_manager?.id) { toast.info('Same manager, no change needed'); setSaving(false); return; }
       await api.post('/assignments', {
-        manager_id: newManagerId,
+        manager_id: managerId,
         property_id: editModal.id,
         start_date: startDate,
         end_current: true
@@ -174,22 +187,69 @@ export default function Properties() {
                 <div className="p-3 rounded-lg bg-stone-50 border border-stone-100">
                   <div className="text-xs text-stone-400 mb-0.5">Current Manager</div>
                   <div className="font-medium text-stone-700 text-sm">{editModal.current_manager.name}</div>
+                  <div className="text-xs text-stone-400">{editModal.current_manager.phone}</div>
                 </div>
               )}
-              <div>
-                <label className="block text-xs font-semibold text-stone-600 mb-1.5 uppercase tracking-wide">New Manager</label>
-                <select
-                  value={newManagerId}
-                  onChange={e => setNewManagerId(e.target.value)}
-                  data-testid="manager-select"
-                  className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F]"
+
+              {/* Toggle: existing vs new */}
+              <div className="flex rounded-lg border border-stone-200 overflow-hidden">
+                <button
+                  onClick={() => setAddingNew(false)}
+                  className={`flex-1 py-2 text-xs font-medium transition-colors ${!addingNew ? 'bg-[#556B2F] text-white' : 'bg-white text-stone-500 hover:bg-stone-50'}`}
                 >
-                  <option value="">Select a manager</option>
-                  {managers.map(m => (
-                    <option key={m.id} value={m.id}>{m.name} — {m.phone}</option>
-                  ))}
-                </select>
+                  Existing Manager
+                </button>
+                <button
+                  data-testid="add-new-manager-toggle"
+                  onClick={() => setAddingNew(true)}
+                  className={`flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${addingNew ? 'bg-[#556B2F] text-white' : 'bg-white text-stone-500 hover:bg-stone-50'}`}
+                >
+                  <PlusCircle size={12} /> Add New Manager
+                </button>
               </div>
+
+              {!addingNew ? (
+                <div>
+                  <label className="block text-xs font-semibold text-stone-600 mb-1.5 uppercase tracking-wide">Select Manager</label>
+                  <select
+                    value={newManagerId}
+                    onChange={e => setNewManagerId(e.target.value)}
+                    data-testid="manager-select"
+                    className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F]"
+                  >
+                    <option value="">Select a manager</option>
+                    {managers.map(m => (
+                      <option key={m.id} value={m.id}>{m.name} — {m.phone}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-600 mb-1.5 uppercase tracking-wide">New Manager Name</label>
+                    <input
+                      type="text"
+                      value={newMgr.name}
+                      onChange={e => setNewMgr({ ...newMgr, name: e.target.value })}
+                      placeholder="Full name"
+                      data-testid="new-manager-name"
+                      className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-600 mb-1.5 uppercase tracking-wide">Phone Number</label>
+                    <input
+                      type="text"
+                      value={newMgr.phone}
+                      onChange={e => setNewMgr({ ...newMgr, phone: e.target.value })}
+                      placeholder="10-digit phone"
+                      data-testid="new-manager-phone"
+                      className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F]"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-semibold text-stone-600 mb-1.5 uppercase tracking-wide">Assignment Start Date</label>
                 <input
