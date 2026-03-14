@@ -1,11 +1,11 @@
 # Yube1 Stays — Occupancy Management Dashboard
 **PRD & Implementation Memory**
-_Last Updated: March 2026_
+_Last Updated: Feb 2026_
 
 ---
 
 ## Problem Statement
-Build a full-stack dashboard for Yube1 Stays to manage occupancy data across 34 co-living/student accommodation properties. Includes daily occupancy entry, consolidated reports, and property manager performance tracking (including lifetime tracking across property changes).
+Build a full-stack dashboard for Yube1 Stays to manage occupancy data across 34 co-living/student accommodation properties. Includes daily occupancy entry, consolidated reports, property and manager performance tracking (including lifetime tracking across property changes), and detailed property analytics with heatmap visualization.
 
 ---
 
@@ -18,7 +18,7 @@ Build a full-stack dashboard for Yube1 Stays to manage occupancy data across 34 
 ---
 
 ## Architecture
-- **Backend**: FastAPI + Motor (async MongoDB) + JWT auth + bcrypt
+- **Backend**: FastAPI + Motor (async MongoDB) + JWT auth + passlib/bcrypt
 - **Frontend**: React + Recharts + Tailwind CSS + Shadcn UI + Sonner toasts
 - **Database**: MongoDB (seeded on startup)
 - **Theme**: Olive Green (#556B2F) + Signal Yellow (#F5C518), light clean
@@ -49,7 +49,7 @@ Build a full-stack dashboard for Yube1 Stays to manage occupancy data across 34 
 | Yube1 Prodigy | 106 | Abilash |
 | Yube1 Pushkar | 38 | Charan |
 | Yube1 Sarmani | 56 | Dhanush |
-| Yube1 Sarovar | 20 | **Bene** (updated from Abdul — March 2026) |
+| Yube1 Sarovar | 20 | Bene |
 | Yube1 Serenity | 50 | Anitha |
 | Yube1 Sigma League | 118 | Gopi |
 | Yube1 Temple Tower | 95 | Kesava Raman |
@@ -66,13 +66,27 @@ Build a full-stack dashboard for Yube1 Stays to manage occupancy data across 34 
 ---
 
 ## What's Been Implemented
-### Phase 1 MVP (March 2026)
+
+### Phase 1 MVP
 - Auth, Dashboard, Occupancy Entry, Daily/Monthly Reports, PM Performance, Properties, User Management — all implemented and tested (18/18 backend tests)
 
-### Phase 2 Enhancements (March 2026)
-- **CSV/PDF Export**: Added to Daily Report, Monthly Report, PM Performance pages using jsPDF + autoTable
-- **Add New Manager in Properties**: Toggle in change-manager modal between "Select Existing" and "Add New Manager" (name + phone)
-- **Low Occupancy Alerts**: Dashboard alert panel with 3 sections — Low Today (<50%), 3+ Consecutive Days Low, Not Reported Today
+### Phase 2 Enhancements
+- **CSV/PDF Export**: Added to Daily Report, Monthly Report, PM Performance pages
+- **Add New Manager in Properties**: Toggle in change-manager modal
+- **Low Occupancy Alerts**: Dashboard alert panel — Low Today, 3+ Consecutive Days Low, Not Reported Today
+
+### Phase 3 Full CRUD + Redesign
+- **Properties CRUD**: Add Property modal, Delete property (removes all records), Edit beds inline, Assign/Unassign manager
+- **Managers Page** (`/managers`, admin-only): Dedicated CRUD page for property managers — add, edit, delete with confirmation
+- **Redesigned Dashboard**: KPIs, 30-day area chart, top/bottom performer bars, distribution donut, alerts
+- **Redesigned Daily Report**: Summary KPIs, distribution bar, bed utilisation pie, ranked properties chart, complete table
+- **Redesigned Monthly Report**: KPIs, trend area chart, top/bottom performers, complete table, **YoY comparison**
+
+### Phase 4 Property Analytics
+- **Property Performance page** (`/performance/properties`): Property leaderboard ranked by all-time avg occupancy, top-3 podium, CSV export, clickable rows
+- **Property Detail page** (`/performance/properties/:id`): Full property analytics — yearly calendar heatmap (12-month grid, color-coded daily occupancy), monthly bar chart, assignment history, year selector (2024–2027)
+- **Year-over-Year Comparison** in Monthly Report: "Compare with Last Year" button loads side-by-side line chart + data table
+- **Properties page**: Added "View Analytics" icon button (BarChart2) to navigate to PropertyDetail
 
 ---
 
@@ -80,9 +94,14 @@ Build a full-stack dashboard for Yube1 Stays to manage occupancy data across 34 
 - POST /api/auth/login
 - GET /api/auth/me
 - GET /api/properties
+- POST /api/properties
 - PUT /api/properties/{id}
+- DELETE /api/properties/{id}
+- DELETE /api/assignments/property/{id}
 - GET /api/managers
 - POST /api/managers
+- PUT /api/managers/{id}
+- DELETE /api/managers/{id}
 - GET /api/managers/{id}/assignments
 - POST /api/assignments
 - GET /api/occupancy?date=
@@ -90,9 +109,13 @@ Build a full-stack dashboard for Yube1 Stays to manage occupancy data across 34 
 - GET /api/reports/daily?date=
 - GET /api/reports/monthly?year=&month=
 - GET /api/reports/yearly-trend?year=
+- GET /api/reports/trend-comparison?year=
 - GET /api/dashboard/overview
+- GET /api/alerts/low-occupancy?threshold=
 - GET /api/performance/managers
 - GET /api/performance/managers/{id}
+- GET /api/performance/properties
+- GET /api/performance/properties/{id}?year=
 - GET /api/users
 - POST /api/users
 - PUT /api/users/{id}
@@ -102,19 +125,15 @@ Build a full-stack dashboard for Yube1 Stays to manage occupancy data across 34 
 
 ## Prioritized Backlog
 
-### P0 (Critical — Next)
-- [ ] Export reports to CSV/PDF
-
 ### P1 (Important)
-- [ ] Trend comparison: month-over-month or year-over-year
 - [ ] Bulk occupancy entry via CSV upload
-- [ ] Property-level detailed view with full history chart
+- [ ] Property-level daily data table in PropertyDetail (view individual day entries)
+- [ ] Email/notification for low occupancy alerts
 
 ### P2 (Nice to have)
-- [ ] Email reports/alerts (low occupancy alerts)
 - [ ] Mobile responsive improvements
 - [ ] Dashboard filters (by cluster/group of properties)
-- [ ] Yearly occupancy heatmap calendar
+- [ ] Property grouping/clustering feature
 
 ---
 
