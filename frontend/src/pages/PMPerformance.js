@@ -46,6 +46,14 @@ export default function PMPerformance() {
     }
   };
 
+  // Competition ranking: tied percentages get the same rank number
+  const ranks = managers.map((_, idx) => {
+    const target = managers[idx].lifetime_avg_occupancy;
+    return managers.findIndex(m => m.lifetime_avg_occupancy === target) + 1;
+  });
+  const getMedalColor = (rank) =>
+    rank === 1 ? RANK_COLORS[0] : rank === 2 ? RANK_COLORS[1] : rank === 3 ? RANK_COLORS[2] : '#6b7280';
+
   const topManagers = managers.slice(0, 3);
   const restManagers = managers.slice(3);
 
@@ -95,15 +103,15 @@ export default function PMPerformance() {
               {topManagers.map((mgr, idx) => (
                 <div key={mgr.manager_id}
                   data-testid={`top-manager-${idx + 1}`}
-                  className={`bg-white rounded-xl border shadow-sm p-5 relative overflow-hidden ${idx === 0 ? 'border-[#F5C518] shadow-yellow-100' : 'border-stone-100'}`}>
+                  className={`bg-white rounded-xl border shadow-sm p-5 relative overflow-hidden ${ranks[idx] === 1 ? 'border-[#F5C518] shadow-yellow-100' : 'border-stone-100'}`}>
                   {/* Rank Badge */}
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
-                        style={{ backgroundColor: RANK_COLORS[idx] + '22', color: RANK_COLORS[idx] }}>
-                        {idx + 1}
+                        style={{ backgroundColor: getMedalColor(ranks[idx]) + '22', color: getMedalColor(ranks[idx]) }}>
+                        {ranks[idx]}
                       </div>
-                      {idx === 0 && <Trophy size={16} className="text-[#F5C518]" />}
+                      {ranks[idx] === 1 && <Trophy size={16} className="text-[#F5C518]" />}
                     </div>
                     <div className="text-xs text-stone-400">
                       {mgr.total_days_tracked > 0 ? `${mgr.total_days_tracked} days` : 'No data'}
@@ -159,8 +167,8 @@ export default function PMPerformance() {
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-1.5">
                             <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-                              style={idx < 3 ? { backgroundColor: RANK_COLORS[idx] + '22', color: RANK_COLORS[idx] } : { backgroundColor: '#f3f4f6', color: '#6b7280' }}>
-                              {idx + 1}
+                              style={ranks[idx] <= 3 ? { backgroundColor: getMedalColor(ranks[idx]) + '22', color: getMedalColor(ranks[idx]) } : { backgroundColor: '#f3f4f6', color: '#6b7280' }}>
+                              {ranks[idx]}
                             </span>
                           </div>
                         </td>

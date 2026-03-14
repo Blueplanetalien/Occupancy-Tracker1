@@ -22,6 +22,14 @@ export default function PropertyPerformance() {
 
   const top3 = properties.slice(0, 3);
 
+  // Competition ranking: tied avg occupancy gets the same rank number
+  const ranks = properties.map((_, idx) => {
+    const target = properties[idx].all_time_avg;
+    return properties.findIndex(p => p.all_time_avg === target) + 1;
+  });
+  const getMedalColor = (rank) =>
+    rank === 1 ? RANK_COLORS[0] : rank === 2 ? RANK_COLORS[1] : rank === 3 ? RANK_COLORS[2] : '#6b7280';
+
   return (
     <div className="p-6 lg:p-8 min-h-screen bg-[#FAFAF9] animate-fade-in">
       <div className="flex items-center justify-between mb-6">
@@ -61,15 +69,15 @@ export default function PropertyPerformance() {
                   key={prop.property_id}
                   data-testid={`top-property-${idx + 1}`}
                   onClick={() => navigate(`/performance/properties/${prop.property_id}`)}
-                  className={`bg-white rounded-xl border shadow-sm p-5 cursor-pointer hover:shadow-md transition-all group ${idx === 0 ? 'border-[#F5C518] shadow-yellow-100' : 'border-stone-100'}`}
+                  className={`bg-white rounded-xl border shadow-sm p-5 cursor-pointer hover:shadow-md transition-all group ${ranks[idx] === 1 ? 'border-[#F5C518] shadow-yellow-100' : 'border-stone-100'}`}
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
-                        style={{ backgroundColor: RANK_COLORS[idx] + '22', color: RANK_COLORS[idx] }}>
-                        {idx + 1}
+                        style={{ backgroundColor: getMedalColor(ranks[idx]) + '22', color: getMedalColor(ranks[idx]) }}>
+                        {ranks[idx]}
                       </div>
-                      {idx === 0 && <Trophy size={16} className="text-[#F5C518]" />}
+                      {ranks[idx] === 1 && <Trophy size={16} className="text-[#F5C518]" />}
                     </div>
                     <div className="flex items-center gap-1 text-xs text-[#556B2F] opacity-0 group-hover:opacity-100 transition-opacity">
                       <ExternalLink size={11} /> Detail
@@ -125,10 +133,10 @@ export default function PropertyPerformance() {
                     >
                       <td className="px-5 py-3">
                         <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold inline-flex"
-                          style={idx < 3
-                            ? { backgroundColor: RANK_COLORS[idx] + '22', color: RANK_COLORS[idx] }
+                          style={ranks[idx] <= 3
+                            ? { backgroundColor: getMedalColor(ranks[idx]) + '22', color: getMedalColor(ranks[idx]) }
                             : { backgroundColor: '#f3f4f6', color: '#6b7280' }}>
-                          {idx + 1}
+                          {ranks[idx]}
                         </span>
                       </td>
                       <td className="px-5 py-3">
