@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
-import { Building2, Edit2, X, Check, Search, UserPlus, PlusCircle } from 'lucide-react';
+import { Building2, Edit2, X, Check, Search, PlusCircle, UserX, Pencil } from 'lucide-react';
 
 export default function Properties() {
   const { user } = useAuth();
@@ -16,6 +16,11 @@ export default function Properties() {
   const [search, setSearch] = useState('');
   const [addingNew, setAddingNew] = useState(false);
   const [newMgr, setNewMgr] = useState({ name: '', phone: '' });
+
+  // Inline bed editing
+  const [editingBeds, setEditingBeds] = useState(null);
+  const [bedsValue, setBedsValue] = useState('');
+  const [savingBeds, setSavingBeds] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -43,7 +48,6 @@ export default function Properties() {
     setSaving(true);
     try {
       let managerId = newManagerId;
-      // If creating a new manager, create them first
       if (addingNew) {
         if (!newMgr.name || !newMgr.phone) { toast.warning('Enter name and phone for new manager'); setSaving(false); return; }
         const res = await api.post('/managers', { name: newMgr.name, phone: newMgr.phone });
@@ -52,17 +56,36 @@ export default function Properties() {
       }
       if (!managerId) { toast.warning('Select or create a manager'); setSaving(false); return; }
       if (!addingNew && managerId === editModal.current_manager?.id) { toast.info('Same manager, no change needed'); setSaving(false); return; }
-      await api.post('/assignments', {
-        manager_id: managerId,
-        property_id: editModal.id,
-        start_date: startDate,
-        end_current: true
-      });
+      await api.post('/assignments', { manager_id: managerId, property_id: editModal.id, start_date: startDate, end_current: true });
       toast.success('Manager assignment updated');
       setEditModal(null);
       load();
     } catch (e) { toast.error('Failed to update assignment'); }
     finally { setSaving(false); }
+  };
+
+  // Inline bed save
+  const saveBeds = async (propId) => {
+    const val = parseInt(bedsValue);
+    if (isNaN(val) || val < 1) { toast.warning('Enter a valid number of beds'); return; }
+    setSavingBeds(true);
+    try {
+      await api.put(`/properties/${propId}`, { total_beds: val });
+      toast.success('Bed count updated');
+      setEditingBeds(null);
+      load();
+    } catch (e) { toast.error('Failed to update beds'); }
+    finally { setSavingBeds(false); }
+  };
+
+  // Unassign manager from property
+  const handleUnassign = async (prop) => {
+    if (!window.confirm(`Remove ${prop.current_manager?.name} from ${prop.name}?`)) return;
+    try {
+      await api.delete(`/assignments/property/${prop.id}`);
+      toast.success('Manager unassigned from property');
+      load();
+    } catch (e) { toast.error('Failed to unassign manager'); }
   };
 
   const filtered = properties.filter(p =>
@@ -119,6 +142,8 @@ export default function Properties() {
                 {filtered.map((prop, idx) => (
                   <tr key={prop.id} className="border-b border-stone-50 hover:bg-stone-50 transition-colors">
                     <td className="px-5 py-3 text-stone-400 text-xs">{idx + 1}</td>
+
+                    {/* Property Name */}
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-lg bg-[#556B2F]/10 flex items-center justify-center flex-shrink-0">
@@ -130,29 +155,85 @@ export default function Properties() {
                         </div>
                       </div>
                     </td>
+
+                    {/* Total Beds — inline editable */}
                     <td className="px-5 py-3 text-center">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-[#556B2F]/10 text-[#556B2F]">
-                        {prop.total_beds}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      {prop.current_manager ? (
-                        <div>
-                          <div className="font-medium text-stone-700">{prop.current_manager.name}</div>
-                          <div className="text-[10px] text-stone-400">{prop.current_manager.phone}</div>
+                      {user?.role === 'admin' && editingBeds === prop.id ? (
+                        <div className="flex items-center justify-center gap-1">
+                          <input
+                            type="number"
+                            min="1"
+                            value={bedsValue}
+                            onChange={e => setBedsValue(e.target.value)}
+                            data-testid={`beds-input-${idx}`}
+                            className="w-16 text-center px-2 py-1 border border-[#556B2F] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30"
+                            onKeyDown={e => { if (e.key === 'Enter') saveBeds(prop.id); if (e.key === 'Escape') setEditingBeds(null); }}
+                            autoFocus
+                          />
+                          <button
+                            data-testid={`beds-save-${idx}`}
+                            onClick={() => saveBeds(prop.id)}
+                            disabled={savingBeds}
+                            className="p-1 rounded text-green-600 hover:bg-green-50 transition-colors"
+                          >
+                            <Check size={13} />
+                          </button>
+                          <button onClick={() => setEditingBeds(null)} className="p-1 rounded text-stone-400 hover:bg-stone-100 transition-colors">
+                            <X size={13} />
+                          </button>
                         </div>
                       ) : (
-                        <span className="text-stone-300 text-xs">Unassigned</span>
+                        <div className="flex items-center justify-center gap-1.5 group">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-[#556B2F]/10 text-[#556B2F]">
+                            {prop.total_beds}
+                          </span>
+                          {user?.role === 'admin' && (
+                            <button
+                              data-testid={`edit-beds-${idx}`}
+                              onClick={() => { setEditingBeds(prop.id); setBedsValue(String(prop.total_beds)); }}
+                              className="p-1 rounded opacity-0 group-hover:opacity-100 text-stone-400 hover:text-[#556B2F] hover:bg-[#556B2F]/10 transition-all"
+                              title="Edit bed count"
+                            >
+                              <Pencil size={11} />
+                            </button>
+                          )}
+                        </div>
                       )}
                     </td>
-                    <td className="px-5 py-3 text-stone-500 text-xs">{prop.assignment_start || '—'}</td>
+
+                    {/* Current Manager */}
+                    <td className="px-5 py-3">
+                      {prop.current_manager ? (
+                        <div className="flex items-center gap-2 group">
+                          <div>
+                            <div className="font-medium text-stone-700">{prop.current_manager.name}</div>
+                            <div className="text-[10px] text-stone-400">{prop.current_manager.phone}</div>
+                          </div>
+                          {user?.role === 'admin' && (
+                            <button
+                              data-testid={`unassign-manager-${idx}`}
+                              onClick={() => handleUnassign(prop)}
+                              title="Remove manager from this property"
+                              className="ml-1 p-1 rounded opacity-0 group-hover:opacity-100 text-stone-400 hover:text-red-500 hover:bg-red-50 transition-all"
+                            >
+                              <UserX size={13} />
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-stone-300 text-xs italic">Unassigned</span>
+                      )}
+                    </td>
+
+                    <td className="px-5 py-3 text-stone-400 text-xs">{prop.assignment_start || '—'}</td>
+
                     {user?.role === 'admin' && (
                       <td className="px-5 py-3 text-center">
                         <button
                           data-testid={`edit-property-${idx}`}
                           onClick={() => openEdit(prop)}
                           className="p-1.5 rounded-md hover:bg-[#556B2F]/10 text-stone-400 hover:text-[#556B2F] transition-colors"
-                          title="Change Manager"
+                          title="Assign / Change Manager"
                         >
                           <Edit2 size={14} />
                         </button>
@@ -163,19 +244,22 @@ export default function Properties() {
               </tbody>
             </table>
           </div>
-          <div className="px-5 py-3 border-t border-stone-100 bg-stone-50 text-xs text-stone-400">
-            {filtered.length} of {properties.length} properties shown
+          <div className="px-5 py-3 border-t border-stone-100 bg-stone-50 text-xs text-stone-400 flex items-center gap-4">
+            <span>{filtered.length} of {properties.length} properties</span>
+            {user?.role === 'admin' && (
+              <span className="text-stone-300">Hover a row to edit beds or remove manager</span>
+            )}
           </div>
         </div>
       )}
 
-      {/* Edit Modal */}
+      {/* Assign Manager Modal */}
       {editModal && (
         <div className="fixed inset-0 bg-black/40 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-fade-in">
             <div className="flex items-center justify-between px-6 py-5 border-b border-stone-100">
               <div>
-                <h3 className="font-bold font-heading text-[#1A1C18]">Change Manager</h3>
+                <h3 className="font-bold font-heading text-[#1A1C18]">Assign Manager</h3>
                 <p className="text-xs text-stone-400 mt-0.5">{editModal.name}</p>
               </div>
               <button onClick={() => setEditModal(null)} className="p-1.5 rounded-md hover:bg-stone-100 text-stone-400">
@@ -191,7 +275,7 @@ export default function Properties() {
                 </div>
               )}
 
-              {/* Toggle: existing vs new */}
+              {/* Toggle */}
               <div className="flex rounded-lg border border-stone-200 overflow-hidden">
                 <button
                   onClick={() => setAddingNew(false)}
@@ -242,7 +326,7 @@ export default function Properties() {
                       type="text"
                       value={newMgr.phone}
                       onChange={e => setNewMgr({ ...newMgr, phone: e.target.value })}
-                      placeholder="10-digit phone"
+                      placeholder="Phone number"
                       data-testid="new-manager-phone"
                       className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F]"
                     />

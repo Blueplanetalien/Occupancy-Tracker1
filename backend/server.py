@@ -562,6 +562,29 @@ async def delete_user(user_id: str, current_user=Depends(require_admin)):
     return {"message": "User deleted"}
 
 
+@api_router.delete("/assignments/property/{property_id}")
+async def unassign_manager(property_id: str, current_user=Depends(require_admin)):
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    result = await db.assignments.update_many(
+        {"property_id": property_id, "end_date": None},
+        {"$set": {"end_date": today}}
+    )
+    return {"message": "Manager unassigned", "modified": result.modified_count}
+
+@api_router.delete("/managers/{manager_id}")
+async def delete_manager(manager_id: str, current_user=Depends(require_admin)):
+    active = await db.assignments.count_documents({"manager_id": manager_id, "end_date": None})
+    if active > 0:
+        raise HTTPException(
+            status_code=400,
+            detail="This manager has active property assignments. Please unassign them from all properties first."
+        )
+    result = await db.managers.delete_one({"id": manager_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Manager not found")
+    return {"message": "Manager deleted"}
+
+
 # ======================== ALERTS ========================
 
 @api_router.get("/alerts/low-occupancy")

@@ -1,26 +1,50 @@
 import React, { useEffect, useState } from 'react';
 import api from '../utils/api';
-import { Trophy, Phone, Building2, ChevronDown, ChevronUp, Download, FileText } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Trophy, Phone, Building2, ChevronDown, ChevronUp, Download, FileText, Trash2 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   RadarChart, Radar, PolarGrid, PolarAngleAxis
 } from 'recharts';
 import { downloadCSV, exportPMPerformancePDF } from '../utils/export';
+import { toast } from 'sonner';
 
 const RANK_COLORS = ['#F5C518', '#C0C0C0', '#CD7F32'];
 const getColor = (pct) => pct >= 75 ? '#556B2F' : pct >= 50 ? '#F5C518' : '#ef4444';
 
 export default function PMPerformance() {
+  const { user } = useAuth();
   const [managers, setManagers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
+  const [deleting, setDeleting] = useState(null);
 
-  useEffect(() => {
+  const loadManagers = () => {
     api.get('/performance/managers')
       .then(res => setManagers(res.data))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { loadManagers(); }, []);
+
+  const handleDelete = async (mgr) => {
+    if (mgr.current_properties.length > 0) {
+      toast.error(`Cannot delete — ${mgr.manager_name} is currently assigned to ${mgr.current_properties.length} property(s). Unassign them first from the Properties page.`);
+      return;
+    }
+    if (!window.confirm(`Permanently delete ${mgr.manager_name} from the system? Their performance history will also be removed.`)) return;
+    setDeleting(mgr.manager_id);
+    try {
+      await api.delete(`/managers/${mgr.manager_id}`);
+      toast.success(`${mgr.manager_name} removed`);
+      loadManagers();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to delete manager');
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   const topManagers = managers.slice(0, 3);
   const restManagers = managers.slice(3);
@@ -123,6 +147,9 @@ export default function PMPerformance() {
                     <th className="text-center px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Lifetime Avg</th>
                     <th className="text-center px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Days Tracked</th>
                     <th className="text-center px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Details</th>
+                    {user?.role === 'admin' && (
+                      <th className="text-center px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Remove</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -176,11 +203,24 @@ export default function PMPerformance() {
                             {expanded === mgr.manager_id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                           </button>
                         </td>
+                        {user?.role === 'admin' && (
+                          <td className="px-5 py-3 text-center">
+                            <button
+                              data-testid={`delete-manager-${idx}`}
+                              onClick={() => handleDelete(mgr)}
+                              disabled={deleting === mgr.manager_id}
+                              title={mgr.current_properties.length > 0 ? 'Unassign from properties first' : 'Delete manager'}
+                              className={`p-1.5 rounded-md transition-colors disabled:opacity-40 ${mgr.current_properties.length > 0 ? 'text-stone-300 cursor-not-allowed' : 'text-stone-400 hover:text-red-500 hover:bg-red-50'}`}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                       {/* Expanded detail */}
                       {expanded === mgr.manager_id && (
                         <tr className="border-b border-stone-100 bg-stone-25">
-                          <td colSpan={6} className="px-5 py-4">
+                          <td colSpan={user?.role === 'admin' ? 7 : 6} className="px-5 py-4">
                             <div className="bg-stone-50 rounded-lg p-4">
                               <div className="text-xs font-semibold text-stone-600 uppercase tracking-wide mb-3">
                                 Property History — {mgr.manager_name}
