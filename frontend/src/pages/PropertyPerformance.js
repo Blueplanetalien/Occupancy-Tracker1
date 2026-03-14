@@ -22,11 +22,9 @@ export default function PropertyPerformance() {
 
   const top3 = properties.slice(0, 3);
 
-  // Competition ranking: tied avg occupancy gets the same rank number
-  const ranks = properties.map((_, idx) => {
-    const target = properties[idx].all_time_avg;
-    return properties.findIndex(p => p.all_time_avg === target) + 1;
-  });
+  // Dense ranking: same % = same rank, next distinct value = next consecutive number
+  const uniqueAvgs = [...new Set(properties.map(p => p.all_time_avg))].sort((a, b) => b - a);
+  const ranks = properties.map(p => uniqueAvgs.indexOf(p.all_time_avg) + 1);
   const getMedalColor = (rank) =>
     rank === 1 ? RANK_COLORS[0] : rank === 2 ? RANK_COLORS[1] : rank === 3 ? RANK_COLORS[2] : '#6b7280';
 

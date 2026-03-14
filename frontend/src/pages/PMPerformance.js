@@ -46,11 +46,9 @@ export default function PMPerformance() {
     }
   };
 
-  // Competition ranking: tied percentages get the same rank number
-  const ranks = managers.map((_, idx) => {
-    const target = managers[idx].lifetime_avg_occupancy;
-    return managers.findIndex(m => m.lifetime_avg_occupancy === target) + 1;
-  });
+  // Dense ranking: same % = same rank, next distinct value = next consecutive number
+  const uniqueAvgs = [...new Set(managers.map(m => m.lifetime_avg_occupancy))].sort((a, b) => b - a);
+  const ranks = managers.map(mgr => uniqueAvgs.indexOf(mgr.lifetime_avg_occupancy) + 1);
   const getMedalColor = (rank) =>
     rank === 1 ? RANK_COLORS[0] : rank === 2 ? RANK_COLORS[1] : rank === 3 ? RANK_COLORS[2] : '#6b7280';
 
