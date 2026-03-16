@@ -44,14 +44,16 @@ class CreateUserRequest(BaseModel):
     email: str
     password: str
     name: str
+    role: Optional[str] = "cluster_manager"
 
 class UpdateUserRequest(BaseModel):
     name: Optional[str] = None
     password: Optional[str] = None
+    role: Optional[str] = None
 
 class BulkOccupancyRequest(BaseModel):
     date: str
-    entries: List[dict]  # [{property_id, occupancy_percentage}]
+    entries: List[dict]  # [{property_id, occupied_beds}]
 
 class AssignManagerRequest(BaseModel):
     manager_id: str
@@ -115,6 +117,19 @@ async def get_me(current_user=Depends(get_current_user)):
     return current_user
 
 
+@api_router.put("/auth/change-password")
+async def change_password(request: dict, current_user=Depends(get_current_user)):
+    current_pwd = request.get("current_password", "")
+    new_pwd = request.get("new_password", "")
+    if not current_pwd or not new_pwd:
+        raise HTTPException(status_code=400, detail="Both current and new password required")
+    user = await db.users.find_one({"id": current_user["id"]})
+    if not user or not pwd_context.verify(current_pwd, user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    await db.users.update_one({"id": current_user["id"]}, {"$set": {"password_hash": pwd_context.hash(new_pwd)}})
+    return {"message": "Password changed successfully"}
+
+
 # ======================== PROPERTIES ========================
 
 @api_router.get("/properties")
@@ -129,6 +144,11 @@ async def get_properties(current_user=Depends(get_current_user)):
             prop["assignment_start"] = assignment["start_date"]
         else:
             prop["current_manager"] = None
+        if prop.get("cluster_manager_id"):
+            cm = await db.users.find_one({"id": prop["cluster_manager_id"]}, {"_id": 0, "password_hash": 0})
+            prop["cluster_manager"] = {"id": cm["id"], "name": cm["name"], "email": cm["email"]} if cm else None
+        else:
+            prop["cluster_manager"] = None
     return properties
 
 class CreatePropertyRequest(BaseModel):
@@ -276,15 +296,15 @@ async def save_bulk_occupancy(request: BulkOccupancyRequest, current_user=Depend
     saved = 0
     for entry_data in request.entries:
         property_id = entry_data.get("property_id")
-        occupancy_pct = float(entry_data.get("occupancy_percentage", 0))
+        occupied_beds = int(entry_data.get("occupied_beds", 0))
         if not property_id:
             continue
         prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
         if not prop:
             continue
-        if occupancy_pct < 0 or occupancy_pct > 100:
+        if occupied_beds < 0 or occupied_beds > prop["total_beds"]:
             continue
-        occupied_beds = round(prop["total_beds"] * occupancy_pct / 100)
+        occupancy_pct = round(occupied_beds / prop["total_beds"] * 100, 2) if prop["total_beds"] > 0 else 0
         existing = await db.occupancy.find_one({"property_id": property_id, "date": request.date})
         if existing:
             await db.occupancy.update_one(
@@ -556,8 +576,14 @@ async def get_manager_performance(manager_id: str, current_user=Depends(get_curr
     return {"manager": manager, "lifetime_avg_occupancy": round(lifetime_avg, 2), "total_days_tracked": total_days, "assignments": detailed}
 
 
-# ======================== PROPERTY PERFORMANCE ========================
+@api_router.put("/properties/{property_id}/cluster-manager")
+async def set_cluster_manager(property_id: str, request: dict, current_user=Depends(require_admin)):
+    cm_id = request.get("cluster_manager_id") or None
+    await db.properties.update_one({"id": property_id}, {"$set": {"cluster_manager_id": cm_id}})
+    return {"message": "Cluster manager updated"}
 
+
+# ======================== PROPERTY PERFORMANCE ========================
 @api_router.get("/performance/properties")
 async def get_properties_performance(current_user=Depends(get_current_user)):
     properties = await db.properties.find({"is_active": True}, {"_id": 0}).sort("name", 1).to_list(1000)
@@ -683,6 +709,75 @@ async def get_trend_comparison(year: int, current_user=Depends(get_current_user)
     return {"current_year": year, "prev_year": year - 1, "comparison": comparison, "total_beds": total_beds}
 
 
+# ======================== CLUSTER MANAGER PERFORMANCE ========================
+
+@api_router.get("/performance/cluster-managers")
+async def get_cm_performance(current_user=Depends(get_current_user)):
+    cms = await db.users.find({"role": "cluster_manager"}, {"_id": 0, "password_hash": 0}).sort("name", 1).to_list(1000)
+    now = datetime.now(timezone.utc)
+    current_month = now.strftime("%Y-%m")
+    last_month = (now.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+    result = []
+    for cm in cms:
+        cm_props = await db.properties.find({"cluster_manager_id": cm["id"], "is_active": True}, {"_id": 0}).to_list(1000)
+        all_entries = []
+        for prop in cm_props:
+            entries = await db.occupancy.find({"property_id": prop["id"]}, {"_id": 0}).to_list(10000)
+            all_entries.extend(entries)
+        all_time_avg = sum(e["occupancy_percentage"] for e in all_entries) / len(all_entries) if all_entries else 0
+        month_entries = [e for e in all_entries if e["date"].startswith(current_month)]
+        month_avg = sum(e["occupancy_percentage"] for e in month_entries) / len(month_entries) if month_entries else 0
+        last_month_entries = [e for e in all_entries if e["date"].startswith(last_month)]
+        last_month_avg = sum(e["occupancy_percentage"] for e in last_month_entries) / len(last_month_entries) if last_month_entries else 0
+        if month_entries and last_month_entries:
+            trend = "up" if month_avg > last_month_avg else ("down" if month_avg < last_month_avg else "flat")
+        else:
+            trend = "flat"
+        result.append({
+            "cm_id": cm["id"],
+            "cm_name": cm["name"],
+            "cm_email": cm["email"],
+            "properties_count": len(cm_props),
+            "total_beds": sum(p["total_beds"] for p in cm_props),
+            "property_names": [p["name"] for p in cm_props],
+            "all_time_avg": round(all_time_avg, 2),
+            "current_month_avg": round(month_avg, 2),
+            "last_month_avg": round(last_month_avg, 2),
+            "total_days_tracked": len(all_entries),
+            "trend": trend,
+        })
+    result.sort(key=lambda x: x["all_time_avg"], reverse=True)
+    return result
+
+
+@api_router.get("/performance/cluster-managers/monthly")
+async def get_cm_monthly_performance(year: int, month: int, current_user=Depends(get_current_user)):
+    cms = await db.users.find({"role": "cluster_manager"}, {"_id": 0, "password_hash": 0}).sort("name", 1).to_list(1000)
+    month_str = f"{year}-{month:02d}"
+    result = []
+    for cm in cms:
+        cm_props = await db.properties.find({"cluster_manager_id": cm["id"], "is_active": True}, {"_id": 0}).to_list(1000)
+        month_entries = []
+        for prop in cm_props:
+            entries = await db.occupancy.find(
+                {"property_id": prop["id"], "date": {"$regex": f"^{month_str}"}}, {"_id": 0}
+            ).to_list(10000)
+            month_entries.extend(entries)
+        avg = sum(e["occupancy_percentage"] for e in month_entries) / len(month_entries) if month_entries else 0
+        result.append({
+            "cm_id": cm["id"],
+            "cm_name": cm["name"],
+            "cm_email": cm["email"],
+            "properties_count": len(cm_props),
+            "total_beds": sum(p["total_beds"] for p in cm_props),
+            "property_names": [p["name"] for p in cm_props],
+            "avg_occupancy": round(avg, 2),
+            "days_with_data": len(set(e["date"] for e in month_entries)),
+        })
+    result.sort(key=lambda x: x["avg_occupancy"], reverse=True)
+    return {"year": year, "month": month, "data": result}
+
+
 # ======================== USER MANAGEMENT ========================
 
 @api_router.get("/users")
@@ -695,12 +790,13 @@ async def create_user(request: CreateUserRequest, current_user=Depends(require_a
     existing = await db.users.find_one({"email": request.email})
     if existing:
         raise HTTPException(status_code=400, detail="Email already exists")
+    role = request.role if hasattr(request, 'role') and request.role in ["admin", "cluster_manager"] else "cluster_manager"
     user = {
         "id": str(uuid.uuid4()),
         "email": request.email,
         "password_hash": pwd_context.hash(request.password),
         "name": request.name,
-        "role": "cluster_manager",
+        "role": role,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.users.insert_one(user)
@@ -713,6 +809,8 @@ async def update_user(user_id: str, request: UpdateUserRequest, current_user=Dep
         update_data["name"] = request.name
     if request.password:
         update_data["password_hash"] = pwd_context.hash(request.password)
+    if hasattr(request, 'role') and request.role in ["admin", "cluster_manager"]:
+        update_data["role"] = request.role
     if update_data:
         await db.users.update_one({"id": user_id}, {"$set": update_data})
     return {"message": "User updated"}

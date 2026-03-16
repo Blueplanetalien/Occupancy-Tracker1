@@ -1,127 +1,150 @@
-"""Tests for new features: Property Performance, Property Detail, YoY comparison"""
+"""Tests for new features: CM Performance, Change Password, Occupancy Entry (occupied_beds), Properties CM assignment"""
 import pytest
 import requests
 import os
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
-def login():
-    res = requests.post(f"{BASE_URL}/api/auth/login", json={"email": "dharun@yube1.in", "password": "Qwerty@789"})
-    if res.status_code == 200:
-        return res.json().get("access_token")
+def get_token(email, password):
+    r = requests.post(f"{BASE_URL}/api/auth/login", json={"email": email, "password": password})
+    if r.status_code == 200:
+        return r.json().get("access_token")
     return None
 
 @pytest.fixture(scope="module")
-def auth_headers():
-    token = login()
+def admin_token():
+    token = get_token("dharun@yube1.in", "Qwerty@789")
     if not token:
-        pytest.skip("Login failed")
-    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        pytest.skip("Admin login failed")
+    return token
 
-class TestPropertyPerformance:
-    """GET /api/performance/properties - leaderboard of all properties"""
+@pytest.fixture(scope="module")
+def rogan_token():
+    token = get_token("rogan@yube1.in", "Qwerty@123")
+    if not token:
+        pytest.skip("Rogan login failed")
+    return token
 
-    def test_returns_200(self, auth_headers):
-        res = requests.get(f"{BASE_URL}/api/performance/properties", headers=auth_headers)
-        assert res.status_code == 200, f"Expected 200, got {res.status_code}: {res.text[:200]}"
+@pytest.fixture(scope="module")
+def admin_headers(admin_token):
+    return {"Authorization": f"Bearer {admin_token}"}
 
-    def test_returns_34_properties(self, auth_headers):
-        res = requests.get(f"{BASE_URL}/api/performance/properties", headers=auth_headers)
-        data = res.json()
-        assert isinstance(data, list), "Response should be a list"
-        assert len(data) == 34, f"Expected 34 properties, got {len(data)}"
+@pytest.fixture(scope="module")
+def rogan_headers(rogan_token):
+    return {"Authorization": f"Bearer {rogan_token}"}
 
-    def test_properties_sorted_by_all_time_avg(self, auth_headers):
-        res = requests.get(f"{BASE_URL}/api/performance/properties", headers=auth_headers)
-        data = res.json()
-        avgs = [p.get('all_time_avg', 0) for p in data]
-        # Check descending order (properties with data first)
-        tracked = [p for p in data if p.get('total_days_tracked', 0) > 0]
-        if len(tracked) > 1:
-            for i in range(len(tracked) - 1):
-                assert tracked[i]['all_time_avg'] >= tracked[i+1]['all_time_avg'], "Properties should be sorted descending by all_time_avg"
-        print(f"PASS: {len(data)} properties, top avg: {avgs[0] if avgs else 'N/A'}%")
+# ── Auth: Login tests ──
+class TestLogin:
+    def test_dharun_login(self):
+        r = requests.post(f"{BASE_URL}/api/auth/login", json={"email": "dharun@yube1.in", "password": "Qwerty@789"})
+        assert r.status_code == 200
+        data = r.json()
+        assert "access_token" in data
+        assert data["user"]["role"] == "admin"
+        print("PASS: dharun login")
 
-    def test_property_fields(self, auth_headers):
-        res = requests.get(f"{BASE_URL}/api/performance/properties", headers=auth_headers)
-        data = res.json()
+    def test_rogan_login(self):
+        r = requests.post(f"{BASE_URL}/api/auth/login", json={"email": "rogan@yube1.in", "password": "Qwerty@123"})
+        assert r.status_code == 200
+        data = r.json()
+        assert "access_token" in data
+        assert data["user"]["role"] == "admin"
+        print("PASS: rogan login")
+
+# ── CM Performance ──
+class TestCMPerformance:
+    def test_get_lifetime(self, admin_headers):
+        r = requests.get(f"{BASE_URL}/api/performance/cluster-managers", headers=admin_headers)
+        assert r.status_code == 200
+        data = r.json()
+        assert isinstance(data, list)
+        print(f"PASS: CM lifetime - {len(data)} CMs")
+
+    def test_get_monthly(self, admin_headers):
+        r = requests.get(f"{BASE_URL}/api/performance/cluster-managers/monthly?year=2026&month=3", headers=admin_headers)
+        assert r.status_code == 200
+        data = r.json()
+        assert "data" in data
+        assert isinstance(data["data"], list)
+        print(f"PASS: CM monthly - {len(data['data'])} CMs")
+
+# ── Occupancy Entry (occupied_beds) ──
+class TestOccupancyEntry:
+    def test_get_occupancy(self, admin_headers):
+        r = requests.get(f"{BASE_URL}/api/occupancy?date=2026-02-01", headers=admin_headers)
+        assert r.status_code == 200
+        data = r.json()
+        assert isinstance(data, list)
         assert len(data) > 0
-        prop = data[0]
-        for field in ['property_id', 'property_name', 'total_beds', 'all_time_avg', 'current_month_avg', 'total_days_tracked', 'trend']:
-            assert field in prop, f"Missing field: {field}"
-        print(f"PASS: All required fields present in property: {prop['property_name']}")
+        first = data[0]
+        assert "property_id" in first
+        assert "total_beds" in first
+        print(f"PASS: occupancy get - {len(data)} properties")
 
+    def test_save_bulk_occupied_beds(self, admin_headers):
+        r = requests.get(f"{BASE_URL}/api/occupancy?date=2026-01-15", headers=admin_headers)
+        assert r.status_code == 200
+        props = r.json()
+        assert len(props) > 0
+        prop = props[0]
+        beds = min(50, prop["total_beds"])
+        payload = {"date": "2026-01-15", "entries": [{"property_id": prop["property_id"], "occupied_beds": beds}]}
+        r2 = requests.post(f"{BASE_URL}/api/occupancy/bulk", json=payload, headers=admin_headers)
+        assert r2.status_code == 200
+        data = r2.json()
+        assert "message" in data or data.get("saved", 1) >= 1
+        print(f"PASS: bulk save occupied_beds={beds}")
 
-class TestPropertyDetail:
-    """GET /api/performance/properties/{id} - heatmap + monthly data"""
+    def test_occupied_beds_percentage_calculation(self, admin_headers):
+        r = requests.get(f"{BASE_URL}/api/occupancy?date=2026-01-15", headers=admin_headers)
+        props = r.json()
+        prop = next((p for p in props if p.get("occupied_beds") is not None), None)
+        if prop:
+            expected_pct = round(prop["occupied_beds"] / prop["total_beds"] * 100, 2)
+            assert abs(prop.get("occupancy_percentage", 0) - expected_pct) < 0.1
+            print(f"PASS: pct calculation {prop['occupied_beds']}/{prop['total_beds']} = {prop['occupancy_percentage']}%")
+        else:
+            print("SKIP: no occupied_beds data found for date")
 
-    def get_first_property_id(self, auth_headers):
-        res = requests.get(f"{BASE_URL}/api/performance/properties", headers=auth_headers)
-        return res.json()[0]['property_id']
+# ── Change Password ──
+class TestChangePassword:
+    def test_wrong_current_password(self, rogan_headers):
+        r = requests.put(f"{BASE_URL}/api/auth/change-password",
+                         json={"current_password": "WrongPass123", "new_password": "NewPass@456"},
+                         headers=rogan_headers)
+        assert r.status_code in [400, 401, 422]
+        print(f"PASS: wrong current pwd returns {r.status_code}")
 
-    def test_returns_200(self, auth_headers):
-        pid = self.get_first_property_id(auth_headers)
-        res = requests.get(f"{BASE_URL}/api/performance/properties/{pid}?year=2026", headers=auth_headers)
-        assert res.status_code == 200, f"Expected 200, got {res.status_code}: {res.text[:200]}"
+    def test_change_password_success(self, rogan_headers):
+        r = requests.put(f"{BASE_URL}/api/auth/change-password",
+                         json={"current_password": "Qwerty@123", "new_password": "Qwerty@123Temp"},
+                         headers=rogan_headers)
+        assert r.status_code == 200
+        new_token = get_token("rogan@yube1.in", "Qwerty@123Temp")
+        assert new_token is not None, "Login with new password failed"
+        r2 = requests.put(f"{BASE_URL}/api/auth/change-password",
+                          json={"current_password": "Qwerty@123Temp", "new_password": "Qwerty@123"},
+                          headers={"Authorization": f"Bearer {new_token}"})
+        assert r2.status_code == 200
+        print("PASS: change password and revert")
 
-    def test_response_structure(self, auth_headers):
-        pid = self.get_first_property_id(auth_headers)
-        res = requests.get(f"{BASE_URL}/api/performance/properties/{pid}?year=2026", headers=auth_headers)
-        data = res.json()
-        for field in ['property', 'heatmap', 'monthly_averages', 'assignment_history', 'all_time_avg', 'total_days_tracked']:
-            assert field in data, f"Missing field: {field}"
-        print(f"PASS: Property detail structure correct for {data['property']['name']}")
-
-    def test_heatmap_is_dict(self, auth_headers):
-        pid = self.get_first_property_id(auth_headers)
-        res = requests.get(f"{BASE_URL}/api/performance/properties/{pid}?year=2026", headers=auth_headers)
-        data = res.json()
-        assert isinstance(data['heatmap'], dict), "heatmap should be a dict"
-        print(f"PASS: Heatmap is dict with {len(data['heatmap'])} entries")
-
-    def test_monthly_averages_has_12_months(self, auth_headers):
-        pid = self.get_first_property_id(auth_headers)
-        res = requests.get(f"{BASE_URL}/api/performance/properties/{pid}?year=2026", headers=auth_headers)
-        data = res.json()
-        assert len(data['monthly_averages']) == 12, f"Expected 12 monthly entries, got {len(data['monthly_averages'])}"
-        m = data['monthly_averages'][0]
-        for field in ['month', 'month_name', 'avg_occupancy', 'days_with_data']:
-            assert field in m, f"Missing field in monthly_averages: {field}"
-        print("PASS: 12 monthly average entries with correct structure")
-
-    def test_property_sub_object(self, auth_headers):
-        pid = self.get_first_property_id(auth_headers)
-        res = requests.get(f"{BASE_URL}/api/performance/properties/{pid}?year=2026", headers=auth_headers)
-        data = res.json()
-        prop = data['property']
-        for field in ['name', 'total_beds']:
-            assert field in prop, f"Missing field in property sub-object: {field}"
-
-    def test_404_for_invalid_id(self, auth_headers):
-        res = requests.get(f"{BASE_URL}/api/performance/properties/invalid_fake_id_12345?year=2026", headers=auth_headers)
-        assert res.status_code == 404, f"Expected 404, got {res.status_code}"
-        print("PASS: Invalid property ID returns 404")
-
-
-class TestTrendComparison:
-    """GET /api/reports/trend-comparison?year=2026"""
-
-    def test_returns_200(self, auth_headers):
-        res = requests.get(f"{BASE_URL}/api/reports/trend-comparison?year=2026", headers=auth_headers)
-        assert res.status_code == 200, f"Expected 200, got {res.status_code}: {res.text[:200]}"
-
-    def test_response_structure(self, auth_headers):
-        res = requests.get(f"{BASE_URL}/api/reports/trend-comparison?year=2026", headers=auth_headers)
-        data = res.json()
-        assert 'comparison' in data, "Response should have 'comparison' key"
-        assert isinstance(data['comparison'], list), "comparison should be a list"
-        assert len(data['comparison']) == 12, f"Expected 12 months, got {len(data['comparison'])}"
-        print(f"PASS: Trend comparison has {len(data['comparison'])} months")
-
-    def test_comparison_fields(self, auth_headers):
-        res = requests.get(f"{BASE_URL}/api/reports/trend-comparison?year=2026", headers=auth_headers)
-        data = res.json()
-        m = data['comparison'][0]
-        for field in ['month', 'month_name', 'y2025', 'y2026']:
-            assert field in m, f"Missing field: {field}"
-        print(f"PASS: Comparison fields present. Jan 2025: {m.get('y2025')}, Jan 2026: {m.get('y2026')}")
+# ── Properties CM assignment ──
+class TestPropertiesCM:
+    def test_assign_cluster_manager(self, admin_headers):
+        r = requests.get(f"{BASE_URL}/api/properties", headers=admin_headers)
+        assert r.status_code == 200
+        props = r.json()
+        assert len(props) > 0
+        prop_id = props[0]["id"]
+        r2 = requests.get(f"{BASE_URL}/api/users", headers=admin_headers)
+        assert r2.status_code == 200
+        users = r2.json()
+        cms = [u for u in users if u.get("role") == "cluster_manager"]
+        if not cms:
+            print("SKIP: no CMs available to assign")
+            return
+        cm_id = cms[0]["id"]
+        r3 = requests.put(f"{BASE_URL}/api/properties/{prop_id}/cluster-manager",
+                          json={"cm_id": cm_id}, headers=admin_headers)
+        assert r3.status_code in [200, 201, 204]
+        print(f"PASS: CM assigned to property {prop_id}")

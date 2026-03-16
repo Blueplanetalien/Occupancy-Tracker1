@@ -4,11 +4,10 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Save, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 
-const getOccColor = (val) => {
-  if (val == null || val === '') return '';
-  const n = Number(val);
-  if (n >= 75) return 'text-green-600 bg-green-50 border-green-200';
-  if (n >= 50) return 'text-yellow-600 bg-yellow-50 border-yellow-200';
+const getOccColor = (pct) => {
+  if (pct == null) return '';
+  if (pct >= 75) return 'text-green-600 bg-green-50 border-green-200';
+  if (pct >= 50) return 'text-yellow-600 bg-yellow-50 border-yellow-200';
   return 'text-red-500 bg-red-50 border-red-200';
 };
 
@@ -27,7 +26,7 @@ export default function OccupancyEntry() {
       setProperties(res.data);
       const vals = {};
       res.data.forEach(p => {
-        vals[p.property_id] = p.occupancy_percentage != null ? String(p.occupancy_percentage) : '';
+        vals[p.property_id] = p.occupied_beds != null ? String(p.occupied_beds) : '';
       });
       setValues(vals);
       setDirty(false);
@@ -40,8 +39,8 @@ export default function OccupancyEntry() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const handleChange = (propId, val) => {
-    if (val !== '' && (isNaN(val) || Number(val) < 0 || Number(val) > 100)) return;
+  const handleChange = (propId, val, totalBeds) => {
+    if (val !== '' && (isNaN(val) || Number(val) < 0 || !Number.isInteger(Number(val)) || Number(val) > totalBeds)) return;
     setValues(prev => ({ ...prev, [propId]: val }));
     setDirty(true);
   };
@@ -49,7 +48,7 @@ export default function OccupancyEntry() {
   const handleSave = async () => {
     const entries = Object.entries(values)
       .filter(([, v]) => v !== '' && v != null)
-      .map(([property_id, occupancy_percentage]) => ({ property_id, occupancy_percentage: Number(occupancy_percentage) }));
+      .map(([property_id, beds]) => ({ property_id, occupied_beds: Number(beds) }));
     if (entries.length === 0) {
       toast.warning('No data to save');
       return;
@@ -67,9 +66,9 @@ export default function OccupancyEntry() {
     }
   };
 
-  const fillAll = (val) => {
+  const fillAllFull = () => {
     const vals = {};
-    properties.forEach(p => { vals[p.property_id] = String(val); });
+    properties.forEach(p => { vals[p.property_id] = String(p.total_beds); });
     setValues(vals);
     setDirty(true);
   };
@@ -88,7 +87,7 @@ export default function OccupancyEntry() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold font-heading text-[#1A1C18]">Occupancy Entry</h1>
-          <p className="text-sm text-stone-400 mt-0.5">Enter daily occupancy percentage for each property</p>
+          <p className="text-sm text-stone-400 mt-0.5">Enter occupied beds for each property — percentage is calculated automatically</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => loadData()} className="p-2 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 text-stone-500 transition-colors" title="Refresh">
@@ -130,10 +129,10 @@ export default function OccupancyEntry() {
           </span>
         </div>
         <div className="flex gap-2 ml-auto">
-          <button onClick={() => fillAll(100)} className="px-3 py-1.5 text-xs font-medium border border-stone-200 rounded-lg hover:bg-stone-50 text-stone-600">
-            Set All 100%
+          <button onClick={fillAllFull} className="px-3 py-1.5 text-xs font-medium border border-stone-200 rounded-lg hover:bg-stone-50 text-stone-600">
+            Set All Full
           </button>
-          <button onClick={() => setValues({})} className="px-3 py-1.5 text-xs font-medium border border-stone-200 rounded-lg hover:bg-stone-50 text-stone-600">
+          <button onClick={() => { setValues({}); setDirty(true); }} className="px-3 py-1.5 text-xs font-medium border border-stone-200 rounded-lg hover:bg-stone-50 text-stone-600">
             Clear All
           </button>
         </div>
@@ -154,15 +153,15 @@ export default function OccupancyEntry() {
                   <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Property</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Manager</th>
                   <th className="text-center px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Total Beds</th>
-                  <th className="text-center px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Occupancy %</th>
                   <th className="text-center px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Occupied Beds</th>
+                  <th className="text-center px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Occupancy %</th>
                   <th className="text-center px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {properties.map((prop, idx) => {
                   const val = values[prop.property_id] ?? '';
-                  const occBeds = val !== '' ? Math.round(prop.total_beds * Number(val) / 100) : null;
+                  const pct = val !== '' && prop.total_beds > 0 ? (Number(val) / prop.total_beds * 100) : null;
                   return (
                     <tr key={prop.property_id} className={`border-b border-stone-50 hover:bg-stone-50 transition-colors ${idx % 2 === 0 ? '' : 'bg-stone-25'}`}>
                       <td className="px-5 py-3 text-stone-400 text-xs">{idx + 1}</td>
@@ -176,17 +175,21 @@ export default function OccupancyEntry() {
                         <input
                           type="number"
                           min="0"
-                          max="100"
-                          step="0.1"
+                          max={prop.total_beds}
+                          step="1"
                           value={val}
-                          onChange={e => handleChange(prop.property_id, e.target.value)}
+                          onChange={e => handleChange(prop.property_id, e.target.value, prop.total_beds)}
                           data-testid={`occ-input-${idx}`}
-                          placeholder="0–100"
-                          className={`w-24 text-center px-2.5 py-1.5 border rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 transition-all ${getOccColor(val) || 'border-stone-200 focus:border-[#556B2F]'}`}
+                          placeholder={`0–${prop.total_beds}`}
+                          className={`w-24 text-center px-2.5 py-1.5 border rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 transition-all ${pct != null ? getOccColor(pct) : 'border-stone-200 focus:border-[#556B2F]'}`}
                         />
                       </td>
-                      <td className="px-5 py-3 text-center text-stone-600 font-medium">
-                        {occBeds != null ? occBeds : '—'}
+                      <td className="px-5 py-3 text-center">
+                        {pct != null ? (
+                          <span className={`text-sm font-bold px-2.5 py-1 rounded-full ${getOccColor(pct)}`}>
+                            {pct.toFixed(1)}%
+                          </span>
+                        ) : <span className="text-stone-300 text-sm">—</span>}
                       </td>
                       <td className="px-5 py-3 text-center">
                         {prop.entry_id ? (

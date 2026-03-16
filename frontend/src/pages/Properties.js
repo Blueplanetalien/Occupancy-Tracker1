@@ -10,11 +10,14 @@ export default function Properties() {
   const navigate = useNavigate();
   const [properties, setProperties] = useState([]);
   const [managers, setManagers] = useState([]);
+  const [clusterManagers, setClusterManagers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editModal, setEditModal] = useState(null);
   const [newManagerId, setNewManagerId] = useState('');
+  const [newCmId, setNewCmId] = useState('');
   const [startDate, setStartDate] = useState('');
   const [saving, setSaving] = useState(false);
+  const [savingCm, setSavingCm] = useState(false);
   const [search, setSearch] = useState('');
   const [addingNew, setAddingNew] = useState(false);
   const [newMgr, setNewMgr] = useState({ name: '', phone: '' });
@@ -28,9 +31,10 @@ export default function Properties() {
   const load = async () => {
     setLoading(true);
     try {
-      const [pRes, mRes] = await Promise.all([api.get('/properties'), api.get('/managers')]);
+      const [pRes, mRes, uRes] = await Promise.all([api.get('/properties'), api.get('/managers'), api.get('/users')]);
       setProperties(pRes.data);
       setManagers(mRes.data);
+      setClusterManagers(uRes.data.filter(u => u.role === 'cluster_manager'));
     } catch (e) { toast.error('Failed to load properties'); }
     finally { setLoading(false); }
   };
@@ -40,10 +44,21 @@ export default function Properties() {
   const openEdit = (prop) => {
     setEditModal(prop);
     setNewManagerId(prop.current_manager?.id || '');
+    setNewCmId(prop.cluster_manager?.id || '');
     const today = new Date().toISOString().split('T')[0];
     setStartDate(today);
     setAddingNew(false);
     setNewMgr({ name: '', phone: '' });
+  };
+
+  const handleAssignCm = async () => {
+    setSavingCm(true);
+    try {
+      await api.put(`/properties/${editModal.id}/cluster-manager`, { cluster_manager_id: newCmId || null });
+      toast.success(newCmId ? 'Cluster Manager assigned' : 'Cluster Manager removed');
+      load();
+    } catch (e) { toast.error('Failed to update Cluster Manager'); }
+    finally { setSavingCm(false); }
   };
 
   const handleAssign = async () => {
@@ -171,6 +186,7 @@ export default function Properties() {
                   <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Property</th>
                   <th className="text-center px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Total Beds</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Current Manager</th>
+                  <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Cluster Mgr</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Since</th>
                   {user?.role === 'admin' && (
                     <th className="text-center px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Actions</th>
@@ -265,6 +281,18 @@ export default function Properties() {
                     </td>
 
                     <td className="px-5 py-3 text-stone-400 text-xs">{prop.assignment_start || '—'}</td>
+
+                    {/* Cluster Manager column */}
+                    <td className="px-5 py-3">
+                      {prop.cluster_manager ? (
+                        <div className="text-xs">
+                          <div className="font-medium text-stone-600">{prop.cluster_manager.name}</div>
+                          <div className="text-stone-400 text-[10px]">{prop.cluster_manager.email}</div>
+                        </div>
+                      ) : (
+                        <span className="text-stone-300 text-xs italic">None</span>
+                      )}
+                    </td>
 
                     {user?.role === 'admin' && (
                       <td className="px-5 py-3 text-center">
@@ -441,6 +469,30 @@ export default function Properties() {
                   data-testid="assignment-date"
                   className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F]"
                 />
+              </div>
+
+              {/* Cluster Manager Section */}
+              <div className="pt-3 border-t border-stone-100">
+                <div className="text-xs font-bold text-stone-500 uppercase tracking-wide mb-2">Cluster Manager</div>
+                <select
+                  value={newCmId}
+                  onChange={e => setNewCmId(e.target.value)}
+                  data-testid="cm-select"
+                  className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#556B2F]/30 focus:border-[#556B2F] mb-2"
+                >
+                  <option value="">No Cluster Manager</option>
+                  {clusterManagers.map(cm => (
+                    <option key={cm.id} value={cm.id}>{cm.name} — {cm.email}</option>
+                  ))}
+                </select>
+                <button
+                  data-testid="save-cm-btn"
+                  onClick={handleAssignCm}
+                  disabled={savingCm}
+                  className="w-full py-2 bg-stone-700 hover:bg-stone-800 text-white text-xs font-semibold rounded-lg transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {savingCm ? 'Saving...' : 'Save Cluster Manager'}
+                </button>
               </div>
             </div>
             <div className="flex gap-3 px-6 py-4 border-t border-stone-100">
