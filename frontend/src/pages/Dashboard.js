@@ -140,108 +140,177 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Cluster Overview */}
+      {/* Cluster-wise Property Occupancy View */}
       {clusters.length > 0 && (
         <div className="mb-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Users2 size={15} className="text-[#1A1C18]" />
-            <h3 className="text-sm font-bold font-heading text-[#1A1C18]">Cluster Overview</h3>
-            <span className="text-[10px] text-stone-400 font-medium">{clusters.filter(c => c.cm_id !== 'unassigned').length} clusters · today's snapshot</span>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Users2 size={15} className="text-[#1A1C18]" />
+              <h3 className="text-sm font-bold font-heading text-[#1A1C18]">Cluster-wise Occupancy</h3>
+              <span className="text-[10px] text-stone-400 font-medium">
+                {clusters.filter(c => c.cm_id !== 'unassigned').length} clusters · {format(new Date(), 'dd MMM yyyy')}
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                const allIds = clusters.map(c => c.cm_id);
+                const anyOpen = allIds.some(id => clusterExpanded[id] !== false);
+                const next = {};
+                allIds.forEach(id => { next[id] = !anyOpen; });
+                setClusterExpanded(next);
+              }}
+              className="text-[10px] text-stone-400 hover:text-stone-600 px-2.5 py-1 border border-stone-200 rounded-lg hover:bg-stone-50 transition-colors"
+            >
+              Toggle all
+            </button>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {clusters.map(cluster => (
-              <div
-                key={cluster.cm_id}
-                data-testid={`cluster-card-${cluster.cm_id}`}
-                className={`bg-white rounded-xl border border-stone-100 border-l-4 shadow-sm overflow-hidden ${getBorderAccent(cluster.avg_occupancy)}`}
-              >
-                {/* Card Header */}
-                <div className="px-3.5 pt-3.5 pb-0">
-                  <div className="flex items-start justify-between gap-1 mb-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold text-[#1A1C18] truncate leading-tight">{cluster.cm_name}</div>
-                      <div className="text-[10px] text-stone-400 mt-0.5">{cluster.properties.length} prop{cluster.properties.length !== 1 ? 's' : ''}</div>
-                    </div>
-                    {cluster.alert_count > 0 && (
-                      <span className="flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 bg-red-100 text-red-600 rounded-full leading-tight">
-                        {cluster.alert_count}!
-                      </span>
-                    )}
-                  </div>
 
-                  {/* Avg Occupancy */}
-                  <div
-                    className="text-2xl font-bold font-heading mb-0.5"
-                    style={{ color: cluster.avg_occupancy != null ? getColor(cluster.avg_occupancy) : '#d1d5db' }}
-                  >
-                    {cluster.avg_occupancy != null ? `${cluster.avg_occupancy}%` : '—'}
-                  </div>
-                  <div className="text-[9px] text-stone-400 mb-2">avg occupancy today</div>
+          <div className="space-y-3">
+            {clusters.map(cluster => {
+              const isOpen = clusterExpanded[cluster.cm_id] !== false; // default open
+              const clHigh = cluster.properties.filter(p => p.has_entry && p.occupancy_percentage >= 75).length;
+              const clMid  = cluster.properties.filter(p => p.has_entry && p.occupancy_percentage >= 50 && p.occupancy_percentage < 75).length;
+              const clLow  = cluster.properties.filter(p => p.has_entry && p.occupancy_percentage < 50).length;
+              const sortedProps = [...cluster.properties].sort((a, b) => {
+                if (a.has_entry !== b.has_entry) return a.has_entry ? -1 : 1;
+                return b.occupancy_percentage - a.occupancy_percentage;
+              });
 
-                  {/* Progress bar */}
-                  <div className="h-1 bg-stone-100 rounded-full overflow-hidden mb-2.5">
-                    {cluster.avg_occupancy != null && (
-                      <div className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${cluster.avg_occupancy}%`, backgroundColor: getColor(cluster.avg_occupancy) }} />
-                    )}
-                  </div>
-
-                  {/* Stats row */}
-                  <div className="flex items-center justify-between text-[10px] text-stone-400 pb-2.5">
-                    <span className="font-medium text-stone-500">{cluster.total_beds} beds</span>
-                    <span>
-                      {cluster.reporting_count}/{cluster.properties.length}
-                      {cluster.not_reported_count > 0 && (
-                        <span className="text-amber-500 ml-1">· {cluster.not_reported_count} pending</span>
-                      )}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Expand toggle */}
-                <button
-                  onClick={() => toggleCluster(cluster.cm_id)}
-                  className="w-full flex items-center justify-center gap-1 py-1.5 bg-stone-50 hover:bg-stone-100 border-t border-stone-100 text-[10px] text-stone-400 hover:text-stone-600 transition-colors"
+              return (
+                <div
+                  key={cluster.cm_id}
+                  data-testid={`cluster-panel-${cluster.cm_id}`}
+                  className={`bg-white rounded-xl border border-stone-100 border-l-4 shadow-sm overflow-hidden ${getBorderAccent(cluster.avg_occupancy)}`}
                 >
-                  {clusterExpanded[cluster.cm_id] ? (
-                    <><ChevronUp size={11} /> Hide</>
-                  ) : (
-                    <><ChevronDown size={11} /> Properties</>
-                  )}
-                </button>
-
-                {/* Expanded property list */}
-                {clusterExpanded[cluster.cm_id] && (
-                  <div className="max-h-52 overflow-y-auto border-t border-stone-100">
-                    {cluster.properties.map(prop => (
-                      <div
-                        key={prop.property_id}
-                        className="flex items-center gap-2 px-3 py-2 border-b border-stone-50 last:border-0 hover:bg-stone-50"
-                      >
-                        <div
-                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: prop.has_entry ? getColor(prop.occupancy_percentage) : '#e5e7eb' }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[10px] font-medium text-stone-700 truncate leading-tight">
-                            {prop.property_name.replace('Yube1 ', '')}
-                          </div>
-                          {prop.manager_name && (
-                            <div className="text-[9px] text-stone-400 truncate">{prop.manager_name}</div>
-                          )}
-                        </div>
-                        <span
-                          className="text-[10px] font-bold flex-shrink-0"
-                          style={{ color: prop.has_entry ? getColor(prop.occupancy_percentage) : '#d1d5db' }}
-                        >
-                          {prop.has_entry ? `${prop.occupancy_percentage}%` : '—'}
-                        </span>
+                  {/* Cluster Header Row */}
+                  <button
+                    onClick={() => toggleCluster(cluster.cm_id)}
+                    className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-stone-50 transition-colors text-left"
+                  >
+                    {/* CM name + count */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-[#1A1C18]">{cluster.cm_name}</span>
+                        <span className="text-[10px] text-stone-400">{cluster.properties.length} properties</span>
+                        {cluster.alert_count > 0 && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 bg-red-100 text-red-600 rounded-full">
+                            {cluster.alert_count} low
+                          </span>
+                        )}
+                        {cluster.not_reported_count > 0 && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded-full">
+                            {cluster.not_reported_count} pending
+                          </span>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
+                    </div>
+
+                    {/* Cluster stats pills */}
+                    <div className="hidden sm:flex items-center gap-2 text-[10px]">
+                      {clHigh > 0 && <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-semibold">{clHigh} High</span>}
+                      {clMid  > 0 && <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full font-semibold">{clMid} Mid</span>}
+                      {clLow  > 0 && <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded-full font-semibold">{clLow} Low</span>}
+                    </div>
+
+                    {/* Avg occupancy badge */}
+                    <div className="flex items-center gap-3 flex-shrink-0 ml-2">
+                      <div className="text-right">
+                        <div className="text-base font-bold font-heading leading-none"
+                          style={{ color: cluster.avg_occupancy != null ? getColor(cluster.avg_occupancy) : '#d1d5db' }}>
+                          {cluster.avg_occupancy != null ? `${cluster.avg_occupancy}%` : '—'}
+                        </div>
+                        <div className="text-[9px] text-stone-400 mt-0.5">avg today</div>
+                      </div>
+                      <div className="text-stone-300">
+                        {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Cluster-wide progress bar (always visible) */}
+                  {cluster.avg_occupancy != null && (
+                    <div className="px-5 pb-2 -mt-1">
+                      <div className="h-1 bg-stone-100 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-700"
+                          style={{ width: `${cluster.avg_occupancy}%`, backgroundColor: getColor(cluster.avg_occupancy) }} />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Expanded: property table */}
+                  {isOpen && (
+                    <div className="border-t border-stone-100">
+                      {/* Table header */}
+                      <div className="grid grid-cols-12 gap-2 px-5 py-2 bg-stone-50 border-b border-stone-100">
+                        <div className="col-span-4 text-[10px] font-semibold text-stone-400 uppercase tracking-wide">Property</div>
+                        <div className="col-span-3 text-[10px] font-semibold text-stone-400 uppercase tracking-wide hidden sm:block">Manager</div>
+                        <div className="col-span-2 text-[10px] font-semibold text-stone-400 uppercase tracking-wide text-center">Beds</div>
+                        <div className="col-span-3 text-[10px] font-semibold text-stone-400 uppercase tracking-wide">Occupancy</div>
+                      </div>
+
+                      {/* Property rows */}
+                      {sortedProps.map((prop, idx) => (
+                        <div
+                          key={prop.property_id}
+                          data-testid={`cluster-prop-row-${prop.property_id}`}
+                          className={`grid grid-cols-12 gap-2 px-5 py-2.5 border-b border-stone-50 last:border-0 hover:bg-stone-50 transition-colors items-center ${!prop.has_entry ? 'opacity-60' : ''}`}
+                        >
+                          {/* Property name */}
+                          <div className="col-span-4 min-w-0">
+                            <div className="text-xs font-medium text-stone-700 truncate leading-tight">
+                              {prop.property_name.replace('Yube1 ', '')}
+                            </div>
+                            {prop.manager_name && (
+                              <div className="text-[9px] text-stone-400 truncate sm:hidden">{prop.manager_name}</div>
+                            )}
+                          </div>
+
+                          {/* Manager name */}
+                          <div className="col-span-3 hidden sm:block">
+                            <div className="text-[10px] text-stone-500 truncate">{prop.manager_name || '—'}</div>
+                          </div>
+
+                          {/* Beds */}
+                          <div className="col-span-2 text-center">
+                            <span className="text-[10px] text-stone-500">
+                              {prop.has_entry ? `${prop.occupied_beds}/` : ''}{prop.total_beds}
+                            </span>
+                          </div>
+
+                          {/* Occupancy bar + % */}
+                          <div className="col-span-3 flex items-center gap-2">
+                            {prop.has_entry ? (
+                              <>
+                                <div className="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden">
+                                  <div className="h-full rounded-full transition-all duration-500"
+                                    style={{ width: `${prop.occupancy_percentage}%`, backgroundColor: getColor(prop.occupancy_percentage) }} />
+                                </div>
+                                <span className="text-[10px] font-bold flex-shrink-0 w-8 text-right"
+                                  style={{ color: getColor(prop.occupancy_percentage) }}>
+                                  {prop.occupancy_percentage}%
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-[10px] text-stone-300 italic">No data</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Cluster footer summary */}
+                      <div className="px-5 py-2 bg-stone-50 border-t border-stone-100 flex items-center justify-between text-[10px] text-stone-400">
+                        <span>{cluster.reporting_count} of {cluster.properties.length} reported · {cluster.total_beds} total beds</span>
+                        {cluster.avg_occupancy != null && (
+                          <span className="font-semibold" style={{ color: getColor(cluster.avg_occupancy) }}>
+                            Cluster avg: {cluster.avg_occupancy}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
