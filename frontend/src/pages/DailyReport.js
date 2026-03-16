@@ -6,7 +6,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, Legend
 } from 'recharts';
-import { downloadCSV, exportDailyReportPDF } from '../utils/export';
+import { downloadCSV, exportDailyReportPDF, buildClusterGroups } from '../utils/export';
 
 const getColor = (pct) => pct >= 75 ? '#556B2F' : pct >= 50 ? '#F5C518' : '#ef4444';
 const getBg = (pct) => pct >= 75 ? 'bg-green-100 text-green-700' : pct >= 50 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-600';
@@ -30,6 +30,7 @@ export default function DailyReport() {
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState('all');
 
   useEffect(() => {
     setLoading(true);
@@ -44,14 +45,36 @@ export default function DailyReport() {
     setDate(format(delta > 0 ? addDays(d, 1) : subDays(d, 1), 'yyyy-MM-dd'));
   };
 
-  const handleExportCSV = () => report && downloadCSV(report.properties, [
-    { key: 'property_name', label: 'Property' },
-    { key: 'cluster_manager_name', label: 'Cluster Manager' },
-    { key: 'manager_name', label: 'Property Manager' },
-    { key: 'total_beds', label: 'Total Beds' },
-    { key: 'occupied_beds', label: 'Occupied Beds' },
-    { key: 'occupancy_percentage', label: 'Occupancy %' },
-  ], `Yube1_Daily_Report_${date}.csv`, [['Date', date], ['Generated', new Date().toLocaleString('en-IN')]]);
+  const clusterGroups = buildClusterGroups(report?.properties || [], 'daily');
+
+  const handleExportCSV = () => {
+    if (!report) return;
+    downloadCSV(
+      report.properties,
+      [
+        { key: 'property_name', label: 'Property' },
+        { key: 'cluster_manager_name', label: 'Cluster Manager' },
+        { key: 'manager_name', label: 'Property Manager' },
+        { key: 'total_beds', label: 'Total Beds' },
+        { key: 'occupied_beds', label: 'Occupied Beds' },
+        { key: 'occupancy_percentage', label: 'Occupancy %' },
+      ],
+      `Yube1_Daily_Report_${date}.csv`,
+      [['Date', date], ['Generated', new Date().toLocaleString('en-IN')]],
+      {
+        title: 'CLUSTER SUMMARY',
+        columns: [
+          { key: 'name', label: 'Cluster Manager' },
+          { key: 'total', label: 'Total Properties' },
+          { key: 'reporting', label: 'Reporting' },
+          { key: 'occupied_beds', label: 'Occupied Beds' },
+          { key: 'total_beds', label: 'Total Beds' },
+          { key: 'avg_occupancy', label: 'Avg Occupancy %' },
+        ],
+        rows: clusterGroups,
+      }
+    );
+  };
 
   const handleExportPDF = () => report && exportDailyReportPDF(report);
 
@@ -195,10 +218,24 @@ export default function DailyReport() {
             </div>
           </div>
 
-          {/* Detailed Table */}
+          {/* Detailed Table — tabbed: All Properties / By Cluster */}
           <div className="bg-white rounded-xl border border-stone-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-stone-100 flex items-center justify-between">
-              <h3 className="text-sm font-bold font-heading text-[#1A1C18]">Complete Property Report</h3>
+            <div className="px-5 py-4 border-b border-stone-100 flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <h3 className="text-sm font-bold font-heading text-[#1A1C18]">Complete Property Report</h3>
+                <div className="flex items-center gap-1 bg-stone-100 rounded-lg p-0.5">
+                  <button
+                    data-testid="tab-all-properties"
+                    onClick={() => setViewMode('all')}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${viewMode === 'all' ? 'bg-white text-[#556B2F] shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}
+                  >All Properties</button>
+                  <button
+                    data-testid="tab-by-cluster"
+                    onClick={() => setViewMode('cluster')}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${viewMode === 'cluster' ? 'bg-white text-[#556B2F] shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}
+                  >By Cluster</button>
+                </div>
+              </div>
               <div className="flex gap-2 text-xs">
                 <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 font-semibold">High ≥75%</span>
                 <span className="px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-semibold">Mid 50–75%</span>
@@ -211,7 +248,7 @@ export default function DailyReport() {
                   <tr className="bg-stone-50 border-b border-stone-100">
                     <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">#</th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Property</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Cluster Mgr</th>
+                    {viewMode === 'all' && <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Cluster Mgr</th>}
                     <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Manager</th>
                     <th className="text-center px-4 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Beds</th>
                     <th className="text-center px-4 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Occupied</th>
@@ -220,7 +257,7 @@ export default function DailyReport() {
                   </tr>
                 </thead>
                 <tbody>
-                  {allProps.map((prop, idx) => (
+                  {viewMode === 'all' && allProps.map((prop, idx) => (
                     <tr key={prop.property_id} className="border-b border-stone-50 hover:bg-stone-50 transition-colors">
                       <td className="px-5 py-3 text-stone-400 text-xs">{idx + 1}</td>
                       <td className="px-5 py-3">
@@ -251,6 +288,67 @@ export default function DailyReport() {
                         )}
                       </td>
                     </tr>
+                  ))}
+
+                  {viewMode === 'cluster' && clusterGroups.map(group => (
+                    <React.Fragment key={group.name}>
+                      {/* Cluster header row */}
+                      <tr className="border-y-2 border-[#556B2F]/20 bg-[#556B2F]/5">
+                        <td colSpan={7} className="px-5 py-2.5">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-xs font-bold text-[#1A1C18]">{group.name}</span>
+                              <span className="text-[10px] text-stone-500 bg-stone-200 px-2 py-0.5 rounded-full">{group.total} properties</span>
+                              <span className="text-[10px] text-stone-400">{group.reporting} reporting</span>
+                            </div>
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-[10px] text-stone-500">{group.occupied_beds}/{group.total_beds} beds</span>
+                              {group.avg_occupancy != null ? (
+                                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${getBg(group.avg_occupancy)}`}>
+                                  avg {group.avg_occupancy}%
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-stone-300 italic">No data today</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      {/* Property rows within cluster */}
+                      {[...group.properties].sort((a, b) => {
+                        if (a.has_entry !== b.has_entry) return a.has_entry ? -1 : 1;
+                        return b.occupancy_percentage - a.occupancy_percentage;
+                      }).map((prop, pidx) => (
+                        <tr key={prop.property_id} className="border-b border-stone-50 hover:bg-stone-50 transition-colors">
+                          <td className="px-5 py-3 text-stone-400 text-xs">{pidx + 1}</td>
+                          <td className="px-5 py-3">
+                            <div className="font-medium text-stone-800 text-sm">{prop.property_name.replace('Yube1 ', '')}</div>
+                          </td>
+                          <td className="px-5 py-3 text-stone-500 text-xs">{prop.manager_name || '—'}</td>
+                          <td className="px-4 py-3 text-center text-stone-600 font-medium text-xs">{prop.total_beds}</td>
+                          <td className="px-4 py-3 text-center font-semibold text-xs" style={{ color: prop.has_entry ? getColor(prop.occupancy_percentage) : '#9ca3af' }}>
+                            {prop.has_entry ? prop.occupied_beds : '—'}
+                          </td>
+                          <td className="px-4 py-3 text-center text-stone-400 text-xs">
+                            {prop.has_entry ? prop.total_beds - prop.occupied_beds : '—'}
+                          </td>
+                          <td className="px-5 py-3">
+                            {prop.has_entry ? (
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden max-w-20">
+                                  <div className="h-full rounded-full" style={{ width: `${prop.occupancy_percentage}%`, backgroundColor: getColor(prop.occupancy_percentage) }} />
+                                </div>
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getBg(prop.occupancy_percentage)}`}>
+                                  {prop.occupancy_percentage}%
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-stone-300 text-xs">No data</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>

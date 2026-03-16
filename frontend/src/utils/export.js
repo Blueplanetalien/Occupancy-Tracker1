@@ -157,13 +157,47 @@ function colourOccupancyCell(data, colIdx) {
   data.cell.styles.fontStyle   = 'bold';
 }
 
+// ── Cluster grouping helper (exported for use in report pages) ────────────────
+export function buildClusterGroups(properties, mode = 'daily') {
+  const map = {};
+  (properties || []).forEach(p => {
+    const key = p.cluster_manager_name || 'Unassigned';
+    if (!map[key]) map[key] = { name: key, properties: [], total: 0, total_beds: 0, occupied_beds: 0, reporting: 0, avg_occupancy: null };
+    const g = map[key];
+    g.properties.push(p);
+    g.total++;
+    g.total_beds += p.total_beds || 0;
+    if (mode === 'daily' && p.has_entry) { g.occupied_beds += p.occupied_beds || 0; g.reporting++; }
+    else if (mode === 'monthly' && (p.days_with_data || 0) > 0) g.reporting++;
+  });
+  Object.values(map).forEach(g => {
+    const rProps = g.properties.filter(p => mode === 'daily' ? p.has_entry : (p.days_with_data || 0) > 0);
+    if (rProps.length > 0) {
+      const key = mode === 'daily' ? 'occupancy_percentage' : 'avg_occupancy_percentage';
+      g.avg_occupancy = Math.round(rProps.reduce((s, p) => s + (p[key] || 0), 0) / rProps.length);
+    }
+  });
+  return Object.values(map).sort((a, b) => {
+    if (a.name === 'Unassigned') return 1;
+    if (b.name === 'Unassigned') return -1;
+    return (b.avg_occupancy ?? -1) - (a.avg_occupancy ?? -1);
+  });
+}
+
 // ── CSV ───────────────────────────────────────────────────────────────────────
-export function downloadCSV(rows, columns, filename, metadata = []) {
+export function downloadCSV(rows, columns, filename, metadata = [], clusterSection = null) {
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const lines = [];
   if (metadata.length) {
     metadata.forEach(([k, v]) => lines.push(`${esc(k)},${esc(v)}`));
-    lines.push(''); // blank separator
+    lines.push('');
+  }
+  if (clusterSection) {
+    lines.push(esc(clusterSection.title || 'CLUSTER SUMMARY'));
+    lines.push(clusterSection.columns.map(c => esc(c.label)).join(','));
+    clusterSection.rows.forEach(row => lines.push(clusterSection.columns.map(c => esc(row[c.key] ?? '')).join(',')));
+    lines.push('');
+    lines.push(esc('PROPERTY-WISE DETAIL'));
   }
   lines.push(columns.map(c => esc(c.label)).join(','));
   rows.forEach(row => {
@@ -198,13 +232,58 @@ export function exportDailyReportPDF(report) {
 
   drawDistBar(doc, high, mid, low, noData, kpiY + 21);
 
+  // ── Cluster Summary ──────────────────────────────────────────────────────────
+  const clusterGroups = buildClusterGroups(report.properties, 'daily');
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(100, 100, 100);
+  doc.text('CLUSTER SUMMARY', PAGE_MARGIN, kpiY + 42);
+
+  autoTable(doc, {
+    startY: kpiY + 44,
+    head: [['Cluster Manager', 'Properties', 'Reporting', 'Occupied / Total Beds', 'Avg Occupancy']],
+    body: clusterGroups.map(g => [
+      g.name,
+      g.total,
+      `${g.reporting} / ${g.total}`,
+      `${g.occupied_beds} / ${g.total_beds}`,
+      g.avg_occupancy ?? 0,
+    ]),
+    headStyles: { fillColor: OLIVE_MID, fontSize: 7, fontStyle: 'bold', textColor: [255, 255, 255] },
+    bodyStyles: { fontSize: 7, cellPadding: 1.8 },
+    alternateRowStyles: { fillColor: [250, 250, 248] },
+    columnStyles: {
+      0: { cellWidth: 45 },
+      1: { cellWidth: 18, halign: 'center' },
+      2: { cellWidth: 22, halign: 'center' },
+      3: { cellWidth: 42, halign: 'center' },
+      4: { cellWidth: 22, halign: 'center' },
+    },
+    margin: { left: PAGE_MARGIN, right: PAGE_MARGIN },
+    didParseCell: (data) => {
+      colourOccupancyCell(data, 4);
+      if (data.section === 'body' && data.column.index === 4 && data.cell.raw === 0) {
+        data.cell.styles.textColor = [180, 180, 180];
+        data.cell.styles.fontStyle = 'normal';
+      }
+    },
+  });
+
+  const afterClusters = doc.lastAutoTable.finalY + 7;
+
+  // ── Property Detail Table ─────────────────────────────────────────────────────
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(100, 100, 100);
+  doc.text('PROPERTY-WISE DETAIL', PAGE_MARGIN, afterClusters - 1);
+
   const sorted = [...report.properties].sort((a, b) => {
     if (a.has_entry !== b.has_entry) return a.has_entry ? -1 : 1;
     return b.occupancy_percentage - a.occupancy_percentage;
   });
 
   autoTable(doc, {
-    startY: kpiY + 40,
+    startY: afterClusters + 1,
     head: [['#', 'Property', 'Cluster Manager', 'Property Manager', 'Beds', 'Occupied', 'Vacant', 'Occupancy %']],
     body: sorted.map((p, i) => [
       i + 1,
@@ -232,14 +311,12 @@ export function exportDailyReportPDF(report) {
     margin: { left: PAGE_MARGIN, right: PAGE_MARGIN },
     didParseCell: (data) => {
       colourOccupancyCell(data, 7);
-      // Style "No data" rows
       if (data.section === 'body' && data.column.index === 7 && data.cell.raw === 0) {
         data.cell.styles.textColor = [180, 180, 180];
         data.cell.styles.fontStyle = 'normal';
       }
     },
     didDrawCell: (data) => {
-      // Write "No data" text when occupancy is 0/absent
       if (data.section === 'body' && data.column.index === 7) {
         const val = parseFloat(data.cell.raw);
         if (!val || val === 0) {
@@ -268,14 +345,57 @@ export function exportMonthlyReportPDF(report) {
     { label: 'Properties',       value: String(report.properties?.length || 0),            bg: [140, 110, 20] },
   ], kpiY);
 
-  const sorted = [...(report.properties || [])].sort((a, b) => b.avg_occupancy_percentage - a.avg_occupancy_percentage);
+  // ── Cluster Summary ──────────────────────────────────────────────────────────
+  const clusterGroups = buildClusterGroups(report.properties || [], 'monthly');
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(100, 100, 100);
+  doc.text('CLUSTER SUMMARY', PAGE_MARGIN, kpiY + 22);
 
-  // Compute dense ranks
+  autoTable(doc, {
+    startY: kpiY + 24,
+    head: [['Cluster Manager', 'Properties', 'With Data', 'Total Beds', 'Avg Occupancy']],
+    body: clusterGroups.map(g => [
+      g.name,
+      g.total,
+      `${g.reporting} / ${g.total}`,
+      g.total_beds,
+      g.avg_occupancy ?? 0,
+    ]),
+    headStyles: { fillColor: OLIVE_MID, fontSize: 7, fontStyle: 'bold', textColor: [255, 255, 255] },
+    bodyStyles: { fontSize: 7, cellPadding: 1.8 },
+    alternateRowStyles: { fillColor: [250, 250, 248] },
+    columnStyles: {
+      0: { cellWidth: 48 },
+      1: { cellWidth: 18, halign: 'center' },
+      2: { cellWidth: 22, halign: 'center' },
+      3: { cellWidth: 22, halign: 'center' },
+      4: { cellWidth: 22, halign: 'center' },
+    },
+    margin: { left: PAGE_MARGIN, right: PAGE_MARGIN },
+    didParseCell: (data) => {
+      colourOccupancyCell(data, 4);
+      if (data.section === 'body' && data.column.index === 4 && data.cell.raw === 0) {
+        data.cell.styles.textColor = [180, 180, 180];
+        data.cell.styles.fontStyle = 'normal';
+      }
+    },
+  });
+
+  const afterClusters = doc.lastAutoTable.finalY + 7;
+
+  // ── Property Detail Table ─────────────────────────────────────────────────────
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(100, 100, 100);
+  doc.text('PROPERTY-WISE DETAIL', PAGE_MARGIN, afterClusters - 1);
+
+  const sorted = [...(report.properties || [])].sort((a, b) => b.avg_occupancy_percentage - a.avg_occupancy_percentage);
   const uniqueAvgs = [...new Set(sorted.map(p => p.avg_occupancy_percentage))].sort((a, b) => b - a);
   const ranks = sorted.map(p => uniqueAvgs.indexOf(p.avg_occupancy_percentage) + 1);
 
   autoTable(doc, {
-    startY: kpiY + 22,
+    startY: afterClusters + 1,
     head: [['Rank', 'Property', 'Cluster Manager', 'Property Manager', 'Total Beds', 'Avg Occupancy', 'Days']],
     body: sorted.map((p, i) => [
       ranks[i],
@@ -305,7 +425,6 @@ export function exportMonthlyReportPDF(report) {
         data.cell.styles.textColor = [180, 180, 180];
         data.cell.styles.fontStyle = 'normal';
       }
-      // Gold/silver/bronze rank colouring
       if (data.section === 'body' && data.column.index === 0) {
         const rank = parseInt(data.cell.raw);
         if (rank === 1) { data.cell.styles.textColor = [180, 140, 0]; data.cell.styles.fontStyle = 'bold'; }

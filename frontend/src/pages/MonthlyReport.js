@@ -5,7 +5,7 @@ import {
   AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell, Legend
 } from 'recharts';
-import { downloadCSV, exportMonthlyReportPDF } from '../utils/export';
+import { downloadCSV, exportMonthlyReportPDF, buildClusterGroups } from '../utils/export';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const getColor = (pct) => pct >= 75 ? '#556B2F' : pct >= 50 ? '#F5C518' : '#ef4444';
@@ -61,15 +61,36 @@ export default function MonthlyReport() {
   const highCount = withData.filter(p => p.avg_occupancy_percentage >= 75).length;
   const midCount = withData.filter(p => p.avg_occupancy_percentage >= 50 && p.avg_occupancy_percentage < 75).length;
   const lowCount = withData.filter(p => p.avg_occupancy_percentage < 50).length;
+  const [viewMode, setViewMode] = useState('all');
+  const clusterGroups = buildClusterGroups(sorted, 'monthly');
 
-  const handleExportCSV = () => report && downloadCSV(sorted, [
-    { key: 'property_name', label: 'Property' },
-    { key: 'cluster_manager_name', label: 'Cluster Manager' },
-    { key: 'manager_name', label: 'Property Manager' },
-    { key: 'total_beds', label: 'Total Beds' },
-    { key: 'avg_occupancy_percentage', label: 'Avg Occupancy %' },
-    { key: 'days_with_data', label: 'Days with Data' },
-  ], `Yube1_Monthly_${year}_${String(month).padStart(2,'0')}.csv`, [['Period', `${MONTHS[month-1]} ${year}`], ['Generated', new Date().toLocaleString('en-IN')]]);
+  const handleExportCSV = () => {
+    if (!report) return;
+    downloadCSV(
+      sorted,
+      [
+        { key: 'property_name', label: 'Property' },
+        { key: 'cluster_manager_name', label: 'Cluster Manager' },
+        { key: 'manager_name', label: 'Property Manager' },
+        { key: 'total_beds', label: 'Total Beds' },
+        { key: 'avg_occupancy_percentage', label: 'Avg Occupancy %' },
+        { key: 'days_with_data', label: 'Days with Data' },
+      ],
+      `Yube1_Monthly_${year}_${String(month).padStart(2,'0')}.csv`,
+      [['Period', `${MONTHS[month-1]} ${year}`], ['Generated', new Date().toLocaleString('en-IN')]],
+      {
+        title: 'CLUSTER SUMMARY',
+        columns: [
+          { key: 'name', label: 'Cluster Manager' },
+          { key: 'total', label: 'Total Properties' },
+          { key: 'reporting', label: 'Properties with Data' },
+          { key: 'total_beds', label: 'Total Beds' },
+          { key: 'avg_occupancy', label: 'Avg Occupancy %' },
+        ],
+        rows: clusterGroups,
+      }
+    );
+  };
 
   const handleExportPDF = () => report && exportMonthlyReportPDF(report);
 
@@ -228,18 +249,32 @@ export default function MonthlyReport() {
             </div>
           </div>
 
-          {/* Full Table */}
+          {/* Full Table — tabbed: All Properties / By Cluster */}
           <div className="bg-white rounded-xl border border-stone-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-stone-100">
-              <h3 className="text-sm font-bold font-heading text-[#1A1C18]">Complete Monthly Summary — {MONTHS[month - 1]} {year}</h3>
+            <div className="px-5 py-4 border-b border-stone-100 flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <h3 className="text-sm font-bold font-heading text-[#1A1C18]">Complete Monthly Summary — {MONTHS[month - 1]} {year}</h3>
+                <div className="flex items-center gap-1 bg-stone-100 rounded-lg p-0.5">
+                  <button
+                    data-testid="monthly-tab-all"
+                    onClick={() => setViewMode('all')}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${viewMode === 'all' ? 'bg-white text-[#556B2F] shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}
+                  >All Properties</button>
+                  <button
+                    data-testid="monthly-tab-cluster"
+                    onClick={() => setViewMode('cluster')}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${viewMode === 'cluster' ? 'bg-white text-[#556B2F] shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}
+                  >By Cluster</button>
+                </div>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-stone-50 border-b border-stone-100">
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Rank</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{viewMode === 'all' ? 'Rank' : '#'}</th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Property</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Cluster Mgr</th>
+                    {viewMode === 'all' && <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Cluster Mgr</th>}
                     <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Manager</th>
                     <th className="text-center px-4 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Beds</th>
                     <th className="text-center px-4 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Days with Data</th>
@@ -247,7 +282,7 @@ export default function MonthlyReport() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sorted.map((prop, idx) => (
+                  {viewMode === 'all' && sorted.map((prop, idx) => (
                     <tr key={prop.property_id} className="border-b border-stone-50 hover:bg-stone-50 transition-colors">
                       <td className="px-5 py-3 text-stone-400 text-xs">{idx + 1}</td>
                       <td className="px-5 py-3">
@@ -273,6 +308,59 @@ export default function MonthlyReport() {
                         )}
                       </td>
                     </tr>
+                  ))}
+
+                  {viewMode === 'cluster' && clusterGroups.map(group => (
+                    <React.Fragment key={group.name}>
+                      {/* Cluster header row */}
+                      <tr className="border-y-2 border-[#556B2F]/20 bg-[#556B2F]/5">
+                        <td colSpan={6} className="px-5 py-2.5">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-xs font-bold text-[#1A1C18]">{group.name}</span>
+                              <span className="text-[10px] text-stone-500 bg-stone-200 px-2 py-0.5 rounded-full">{group.total} properties</span>
+                              <span className="text-[10px] text-stone-400">{group.reporting} with data</span>
+                            </div>
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-[10px] text-stone-500">{group.total_beds} total beds</span>
+                              {group.avg_occupancy != null ? (
+                                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${getBg(group.avg_occupancy)}`}>
+                                  avg {group.avg_occupancy}%
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-stone-300 italic">No data this month</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      {/* Property rows within cluster */}
+                      {[...group.properties].sort((a, b) => b.avg_occupancy_percentage - a.avg_occupancy_percentage).map((prop, pidx) => (
+                        <tr key={prop.property_id} className="border-b border-stone-50 hover:bg-stone-50 transition-colors">
+                          <td className="px-5 py-3 text-stone-400 text-xs">{pidx + 1}</td>
+                          <td className="px-5 py-3">
+                            <div className="font-medium text-stone-800 text-sm">{prop.property_name.replace('Yube1 ', '')}</div>
+                          </td>
+                          <td className="px-5 py-3 text-stone-500 text-xs">{prop.manager_name || '—'}</td>
+                          <td className="px-4 py-3 text-center text-stone-600 text-xs font-medium">{prop.total_beds}</td>
+                          <td className="px-4 py-3 text-center text-stone-500 text-xs">{prop.days_with_data}</td>
+                          <td className="px-5 py-3">
+                            {prop.days_with_data > 0 ? (
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden max-w-24">
+                                  <div className="h-full rounded-full" style={{ width: `${prop.avg_occupancy_percentage}%`, backgroundColor: getColor(prop.avg_occupancy_percentage) }} />
+                                </div>
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getBg(prop.avg_occupancy_percentage)}`}>
+                                  {prop.avg_occupancy_percentage}%
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-stone-300 text-xs">No data</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
