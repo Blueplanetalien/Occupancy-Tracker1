@@ -45,10 +45,13 @@ export default function DailyReport() {
   };
 
   const handleExportCSV = () => report && downloadCSV(report.properties, [
-    { key: 'property_name', label: 'Property' }, { key: 'manager_name', label: 'Manager' },
-    { key: 'total_beds', label: 'Total Beds' }, { key: 'occupied_beds', label: 'Occupied Beds' },
+    { key: 'property_name', label: 'Property' },
+    { key: 'cluster_manager_name', label: 'Cluster Manager' },
+    { key: 'manager_name', label: 'Property Manager' },
+    { key: 'total_beds', label: 'Total Beds' },
+    { key: 'occupied_beds', label: 'Occupied Beds' },
     { key: 'occupancy_percentage', label: 'Occupancy %' },
-  ], `Yube1_Daily_Report_${date}.csv`);
+  ], `Yube1_Daily_Report_${date}.csv`, [['Date', date], ['Generated', new Date().toLocaleString('en-IN')]]);
 
   const handleExportPDF = () => report && exportDailyReportPDF(report);
 
@@ -208,6 +211,7 @@ export default function DailyReport() {
                   <tr className="bg-stone-50 border-b border-stone-100">
                     <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">#</th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Property</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Cluster Mgr</th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Manager</th>
                     <th className="text-center px-4 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Beds</th>
                     <th className="text-center px-4 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Occupied</th>
@@ -223,6 +227,7 @@ export default function DailyReport() {
                         <div className="font-medium text-stone-800 text-sm">{prop.property_name.replace('Yube1 ', '')}</div>
                         <div className="text-[10px] text-stone-400">{prop.property_name}</div>
                       </td>
+                      <td className="px-5 py-3 text-stone-500 text-xs">{prop.cluster_manager_name || '—'}</td>
                       <td className="px-5 py-3 text-stone-500 text-xs">{prop.manager_name || '—'}</td>
                       <td className="px-4 py-3 text-center text-stone-600 font-medium text-xs">{prop.total_beds}</td>
                       <td className="px-4 py-3 text-center font-semibold text-xs" style={{ color: prop.has_entry ? getColor(prop.occupancy_percentage) : '#9ca3af' }}>

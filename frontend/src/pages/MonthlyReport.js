@@ -63,10 +63,13 @@ export default function MonthlyReport() {
   const lowCount = withData.filter(p => p.avg_occupancy_percentage < 50).length;
 
   const handleExportCSV = () => report && downloadCSV(sorted, [
-    { key: 'property_name', label: 'Property' }, { key: 'manager_name', label: 'Manager' },
-    { key: 'total_beds', label: 'Total Beds' }, { key: 'avg_occupancy_percentage', label: 'Avg Occupancy %' },
+    { key: 'property_name', label: 'Property' },
+    { key: 'cluster_manager_name', label: 'Cluster Manager' },
+    { key: 'manager_name', label: 'Property Manager' },
+    { key: 'total_beds', label: 'Total Beds' },
+    { key: 'avg_occupancy_percentage', label: 'Avg Occupancy %' },
     { key: 'days_with_data', label: 'Days with Data' },
-  ], `Yube1_Monthly_${year}_${String(month).padStart(2,'0')}.csv`);
+  ], `Yube1_Monthly_${year}_${String(month).padStart(2,'0')}.csv`, [['Period', `${MONTHS[month-1]} ${year}`], ['Generated', new Date().toLocaleString('en-IN')]]);
 
   const handleExportPDF = () => report && exportMonthlyReportPDF(report);
 
@@ -236,6 +239,7 @@ export default function MonthlyReport() {
                   <tr className="bg-stone-50 border-b border-stone-100">
                     <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Rank</th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Property</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Cluster Mgr</th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Manager</th>
                     <th className="text-center px-4 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Beds</th>
                     <th className="text-center px-4 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">Days with Data</th>
@@ -250,6 +254,7 @@ export default function MonthlyReport() {
                         <div className="font-medium text-stone-800 text-sm">{prop.property_name.replace('Yube1 ', '')}</div>
                         <div className="text-[10px] text-stone-400">{prop.property_name}</div>
                       </td>
+                      <td className="px-5 py-3 text-stone-500 text-xs">{prop.cluster_manager_name || '—'}</td>
                       <td className="px-5 py-3 text-stone-500 text-xs">{prop.manager_name || '—'}</td>
                       <td className="px-4 py-3 text-center text-stone-600 text-xs font-medium">{prop.total_beds}</td>
                       <td className="px-4 py-3 text-center text-stone-500 text-xs">{prop.days_with_data}</td>
