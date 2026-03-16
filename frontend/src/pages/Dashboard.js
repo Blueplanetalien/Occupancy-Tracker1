@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { Building2, BedDouble, TrendingUp, Activity, ArrowUpRight, AlertTriangle, Bell, Clock, TrendingDown } from 'lucide-react';
+import { Building2, BedDouble, TrendingUp, Activity, ArrowUpRight, AlertTriangle, Bell, Clock, TrendingDown, ChevronDown, ChevronUp, Users2 } from 'lucide-react';
 import {
-  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell, PieChart, Pie, Legend
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Cell, PieChart, Pie
 } from 'recharts';
 import { format } from 'date-fns';
 
@@ -41,20 +41,33 @@ export default function Dashboard() {
   const [overview, setOverview] = useState(null);
   const [dailyReport, setDailyReport] = useState(null);
   const [alerts, setAlerts] = useState(null);
+  const [clusters, setClusters] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [clusterExpanded, setClusterExpanded] = useState({});
   const today = format(new Date(), 'yyyy-MM-dd');
 
   useEffect(() => {
     Promise.all([
       api.get('/dashboard/overview'),
       api.get(`/reports/daily?date=${today}`),
-      api.get('/alerts/low-occupancy?threshold=50')
-    ]).then(([ov, dr, al]) => {
+      api.get('/alerts/low-occupancy?threshold=50'),
+      api.get('/dashboard/clusters'),
+    ]).then(([ov, dr, al, cl]) => {
       setOverview(ov.data);
       setDailyReport(dr.data);
       setAlerts(al.data);
+      setClusters(cl.data);
     }).catch(console.error).finally(() => setLoading(false));
   }, [today]);
+
+  const toggleCluster = (id) => setClusterExpanded(p => ({ ...p, [id]: !p[id] }));
+
+  const getBorderAccent = (pct) => {
+    if (pct == null) return 'border-l-stone-200';
+    if (pct >= 75) return 'border-l-[#556B2F]';
+    if (pct >= 50) return 'border-l-[#F5C518]';
+    return 'border-l-red-400';
+  };
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
@@ -127,9 +140,114 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Cluster Overview */}
+      {clusters.length > 0 && (
+        <div className="mb-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Users2 size={15} className="text-[#1A1C18]" />
+            <h3 className="text-sm font-bold font-heading text-[#1A1C18]">Cluster Overview</h3>
+            <span className="text-[10px] text-stone-400 font-medium">{clusters.filter(c => c.cm_id !== 'unassigned').length} clusters · today's snapshot</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {clusters.map(cluster => (
+              <div
+                key={cluster.cm_id}
+                data-testid={`cluster-card-${cluster.cm_id}`}
+                className={`bg-white rounded-xl border border-stone-100 border-l-4 shadow-sm overflow-hidden ${getBorderAccent(cluster.avg_occupancy)}`}
+              >
+                {/* Card Header */}
+                <div className="px-3.5 pt-3.5 pb-0">
+                  <div className="flex items-start justify-between gap-1 mb-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-[#1A1C18] truncate leading-tight">{cluster.cm_name}</div>
+                      <div className="text-[10px] text-stone-400 mt-0.5">{cluster.properties.length} prop{cluster.properties.length !== 1 ? 's' : ''}</div>
+                    </div>
+                    {cluster.alert_count > 0 && (
+                      <span className="flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 bg-red-100 text-red-600 rounded-full leading-tight">
+                        {cluster.alert_count}!
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Avg Occupancy */}
+                  <div
+                    className="text-2xl font-bold font-heading mb-0.5"
+                    style={{ color: cluster.avg_occupancy != null ? getColor(cluster.avg_occupancy) : '#d1d5db' }}
+                  >
+                    {cluster.avg_occupancy != null ? `${cluster.avg_occupancy}%` : '—'}
+                  </div>
+                  <div className="text-[9px] text-stone-400 mb-2">avg occupancy today</div>
+
+                  {/* Progress bar */}
+                  <div className="h-1 bg-stone-100 rounded-full overflow-hidden mb-2.5">
+                    {cluster.avg_occupancy != null && (
+                      <div className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${cluster.avg_occupancy}%`, backgroundColor: getColor(cluster.avg_occupancy) }} />
+                    )}
+                  </div>
+
+                  {/* Stats row */}
+                  <div className="flex items-center justify-between text-[10px] text-stone-400 pb-2.5">
+                    <span className="font-medium text-stone-500">{cluster.total_beds} beds</span>
+                    <span>
+                      {cluster.reporting_count}/{cluster.properties.length}
+                      {cluster.not_reported_count > 0 && (
+                        <span className="text-amber-500 ml-1">· {cluster.not_reported_count} pending</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Expand toggle */}
+                <button
+                  onClick={() => toggleCluster(cluster.cm_id)}
+                  className="w-full flex items-center justify-center gap-1 py-1.5 bg-stone-50 hover:bg-stone-100 border-t border-stone-100 text-[10px] text-stone-400 hover:text-stone-600 transition-colors"
+                >
+                  {clusterExpanded[cluster.cm_id] ? (
+                    <><ChevronUp size={11} /> Hide</>
+                  ) : (
+                    <><ChevronDown size={11} /> Properties</>
+                  )}
+                </button>
+
+                {/* Expanded property list */}
+                {clusterExpanded[cluster.cm_id] && (
+                  <div className="max-h-52 overflow-y-auto border-t border-stone-100">
+                    {cluster.properties.map(prop => (
+                      <div
+                        key={prop.property_id}
+                        className="flex items-center gap-2 px-3 py-2 border-b border-stone-50 last:border-0 hover:bg-stone-50"
+                      >
+                        <div
+                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: prop.has_entry ? getColor(prop.occupancy_percentage) : '#e5e7eb' }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[10px] font-medium text-stone-700 truncate leading-tight">
+                            {prop.property_name.replace('Yube1 ', '')}
+                          </div>
+                          {prop.manager_name && (
+                            <div className="text-[9px] text-stone-400 truncate">{prop.manager_name}</div>
+                          )}
+                        </div>
+                        <span
+                          className="text-[10px] font-bold flex-shrink-0"
+                          style={{ color: prop.has_entry ? getColor(prop.occupancy_percentage) : '#d1d5db' }}
+                        >
+                          {prop.has_entry ? `${prop.occupancy_percentage}%` : '—'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Charts Row */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-5">
-        {/* 30-day Trend Area Chart */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-5">        {/* 30-day Trend Area Chart */}
         <div data-testid="trend-chart" className="xl:col-span-2 bg-white rounded-xl border border-stone-100 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <div>

@@ -452,6 +452,73 @@ async def get_yearly_trend(year: int, current_user=Depends(get_current_user)):
         monthly_data.append({"month": month, "month_name": calendar.month_abbr[month], "avg_occupancy": round(avg, 2)})
     return {"year": year, "monthly_trend": monthly_data}
 
+@api_router.get("/dashboard/clusters")
+async def get_cluster_overview(current_user=Depends(get_current_user)):
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    properties = await db.properties.find({"is_active": True}, {"_id": 0}).to_list(1000)
+    today_entries = await db.occupancy.find({"date": today}, {"_id": 0}).to_list(1000)
+    occ_map = {e["property_id"]: e for e in today_entries}
+    cms = await db.users.find({"role": "cluster_manager"}, {"_id": 0, "password_hash": 0}).sort("name", 1).to_list(1000)
+
+    clusters = {
+        cm["id"]: {
+            "cm_id": cm["id"], "cm_name": cm["name"], "cm_email": cm["email"],
+            "properties": [], "total_beds": 0, "reporting_count": 0,
+            "alert_count": 0, "total_occupied_beds": 0,
+        }
+        for cm in cms
+    }
+    clusters["unassigned"] = {
+        "cm_id": "unassigned", "cm_name": "Unassigned", "cm_email": None,
+        "properties": [], "total_beds": 0, "reporting_count": 0,
+        "alert_count": 0, "total_occupied_beds": 0,
+    }
+
+    for prop in properties:
+        cm_key = prop.get("cluster_manager_id") if prop.get("cluster_manager_id") in clusters else "unassigned"
+        entry = occ_map.get(prop["id"])
+        has_entry = entry is not None
+        occ_pct = round(entry["occupancy_percentage"], 1) if entry else None
+        occ_beds = entry["occupied_beds"] if entry else 0
+
+        assignment = await db.assignments.find_one({"property_id": prop["id"], "end_date": None}, {"_id": 0})
+        manager_name = None
+        if assignment:
+            mgr = await db.managers.find_one({"id": assignment["manager_id"]}, {"_id": 0})
+            if mgr:
+                manager_name = mgr["name"]
+
+        clusters[cm_key]["properties"].append({
+            "property_id": prop["id"], "property_name": prop["name"],
+            "total_beds": prop["total_beds"], "manager_name": manager_name,
+            "has_entry": has_entry, "occupancy_percentage": occ_pct,
+            "occupied_beds": occ_beds, "is_alert": has_entry and occ_pct < 50,
+        })
+        clusters[cm_key]["total_beds"] += prop["total_beds"]
+        if has_entry:
+            clusters[cm_key]["reporting_count"] += 1
+            clusters[cm_key]["total_occupied_beds"] += occ_beds
+        if has_entry and occ_pct < 50:
+            clusters[cm_key]["alert_count"] += 1
+
+    result = []
+    for cluster in clusters.values():
+        if cluster["properties"]:  # only include clusters with properties
+            if cluster["total_beds"] > 0 and cluster["reporting_count"] > 0:
+                cluster["avg_occupancy"] = round(cluster["total_occupied_beds"] / cluster["total_beds"] * 100, 1)
+            else:
+                cluster["avg_occupancy"] = None
+            cluster["not_reported_count"] = len(cluster["properties"]) - cluster["reporting_count"]
+            cluster["properties"].sort(key=lambda p: (
+                not p["has_entry"],
+                p["occupancy_percentage"] if p["occupancy_percentage"] is not None else 101
+            ))
+            result.append(cluster)
+
+    result.sort(key=lambda c: (-c["alert_count"], c["cm_name"] == "Unassigned", c["cm_name"]))
+    return result
+
+
 @api_router.get("/dashboard/overview")
 async def get_dashboard_overview(current_user=Depends(get_current_user)):
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")

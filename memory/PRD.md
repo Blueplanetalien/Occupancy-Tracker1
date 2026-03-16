@@ -92,3 +92,4 @@ Properties CRUD, Managers Page (/managers), Redesigned Dashboard/Daily Report/Mo
 - [ ] Mobile responsive improvements
 - [ ] Dashboard filters by cluster group
 - [ ] Property grouping/clustering feature
+- **Dashboard Cluster View**: GET /api/dashboard/clusters, compact CM cards with expand
