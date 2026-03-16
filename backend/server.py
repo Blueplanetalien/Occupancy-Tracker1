@@ -350,12 +350,18 @@ async def get_daily_report(date: str, current_user=Depends(get_current_user)):
                 manager_name = manager["name"]
         occupied = entry["occupied_beds"] if entry else 0
         occ_pct = entry["occupancy_percentage"] if entry else 0
+        cm_name = None
+        if prop.get("cluster_manager_id"):
+            cm_user = await db.users.find_one({"id": prop["cluster_manager_id"]}, {"_id": 0, "password_hash": 0})
+            if cm_user:
+                cm_name = cm_user["name"]
         property_data.append({
             "property_id": prop["id"],
             "property_name": prop["name"],
             "total_beds": prop["total_beds"],
             "manager_name": manager_name,
-            "occupancy_percentage": occ_pct,
+            "cluster_manager_name": cm_name,
+            "occupancy_percentage": round(occ_pct, 1) if occ_pct else 0,
             "occupied_beds": occupied,
             "has_entry": entry is not None
         })
@@ -409,11 +415,17 @@ async def get_monthly_report(year: int, month: int, current_user=Depends(get_cur
             if manager:
                 manager_name = manager["name"]
         avg_occ = sum(e["occupancy_percentage"] for e in prop_entries) / len(prop_entries) if prop_entries else 0
+        cm_name = None
+        if prop.get("cluster_manager_id"):
+            cm_user = await db.users.find_one({"id": prop["cluster_manager_id"]}, {"_id": 0, "password_hash": 0})
+            if cm_user:
+                cm_name = cm_user["name"]
         property_summary.append({
             "property_id": prop["id"],
             "property_name": prop["name"],
             "total_beds": prop["total_beds"],
             "manager_name": manager_name,
+            "cluster_manager_name": cm_name,
             "avg_occupancy_percentage": round(avg_occ, 2),
             "days_with_data": len(prop_entries)
         })
