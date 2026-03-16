@@ -53,8 +53,7 @@ Properties CRUD, Managers Page (/managers), Redesigned Dashboard/Daily Report/Mo
 ### Phase 6 — Enhanced Reports & Dashboard
 - **PDF Design Overhaul**: Styled PDF exports with branded header (YUBE1 STAYS), KPI boxes, occupancy distribution bar, color-coded table cells (green/amber/red), footer with page numbers
 - **Cluster Manager in Reports**: `cluster_manager_name` added to PDF and CSV exports for both Daily and Monthly reports; also added as on-screen column in both report tables
-- **bcrypt Fix**: Downgraded bcrypt 4.1.3 → 4.0.1 to eliminate recurring `AttributeError: module 'bcrypt' has no attribute '__about__'` on backend startup
-- **Cluster-wise Occupancy Dashboard View**: Replaced compact cluster cards with full accordion-table view — each cluster shows all properties with occupancy bars, manager names, beds data, color-coded percentages; collapsible per-cluster with "Toggle all" button and cluster summary footer
+- **Cluster-wise view in Reports**: Tab toggle "All Properties" / "By Cluster" on both Daily and Monthly report pages — "By Cluster" groups properties under each cluster manager with aggregate header row (avg occupancy, beds, reporting count); CSV exports include CLUSTER SUMMARY section before PROPERTY-WISE DETAIL; PDF exports include a CLUSTER SUMMARY table before the property detail table
 
 ---
 
