@@ -50,6 +50,12 @@ Properties CRUD, Managers Page (/managers), Redesigned Dashboard/Daily Report/Mo
 - **Admin Rogan**: rogan@yube1.in / Qwerty@123
 - **User Management**: create/update now supports role selection (admin or cluster_manager)
 
+### Phase 6 — Enhanced Reports
+- **PDF Design Overhaul**: Styled PDF exports with branded header (YUBE1 STAYS), KPI boxes, occupancy distribution bar, color-coded table cells (green/amber/red), footer with page numbers
+- **Cluster Manager in Reports**: `cluster_manager_name` added to PDF and CSV exports for both Daily and Monthly reports
+- **Cluster Mgr column** added to on-screen tables in Daily Report and Monthly Report pages
+- **bcrypt Fix**: Downgraded bcrypt 4.1.3 → 4.0.1 to eliminate recurring `AttributeError: module 'bcrypt' has no attribute '__about__'` on backend startup
+
 ---
 
 ## API Endpoints (complete)
